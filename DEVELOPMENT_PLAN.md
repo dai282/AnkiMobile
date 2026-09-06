@@ -114,17 +114,19 @@ Status: [ ] todo · [~] in progress · [x] done
 - [x] Study Session Back (answer, 4-button grading, applies scheduler)
 - [x] Sync & Account (mocked pull decks + sync progress, toggles, activity log)
 
-### M3 — Polish (next)
-- [ ] Card flip / reveal animation
-- [ ] Haptics on rating
-- [ ] Empty states (deck done, no decks)
-- [ ] Accessibility labels / Dynamic Type pass
-- [ ] Verify Deck Detail + Study + Sync screens on device/simulator (Decks screen verified)
+### M3 — Polish ✅ (Dynamic Type deferred)
+- [x] Card reveal animation + smooth card-to-card transitions
+- [x] Haptics on show-answer, rating (per-rating feel), and session completion
+- [x] Empty states (no decks / no search matches; "nothing due" vs "all caught up")
+- [x] VoiceOver labels on icon buttons and grading buttons
+- [ ] Full Dynamic Type — deferred: design uses fixed px sizes; needs a @ScaledMetric pass
+- [x] Verify Deck Detail + Study + Sync screens on device/simulator (Decks screen verified)
 
 ### Future (post-v1)
 - [ ] Real AnkiWeb pull + progress sync
 - [ ] Media assets
 - [ ] FSRS scheduler option
+- [ ] Full Dynamic Type support (scalable font metrics)
 - [ ] Revisit Offline/Media/Cache controls (currently cosmetic — define real behavior)
 
 ---

@@ -87,6 +87,7 @@ struct DecksView: View {
             .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Sync status: synced. Open Sync tab")
     }
 
     private var avatar: some View {
@@ -99,6 +100,7 @@ struct DecksView: View {
                 .overlay(Circle().strokeBorder(Palette.primary.opacity(0.25), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Account and sync. Open Sync tab")
     }
 
     // MARK: Search
@@ -128,23 +130,54 @@ struct DecksView: View {
     private var decksSection: some View {
         VStack(alignment: .leading, spacing: Metrics.spaceSm) {
             SectionHeader(title: "Decks Available")
-            VStack(spacing: Metrics.spaceXs) {
-                ForEach(filteredDecks) { deck in
-                    if deck.subdecks.isEmpty {
-                        NavigationLink(value: deck) {
-                            DeckRow(deck: deck)
+            if filteredDecks.isEmpty {
+                emptyState
+            } else {
+                VStack(spacing: Metrics.spaceXs) {
+                    ForEach(filteredDecks) { deck in
+                        if deck.subdecks.isEmpty {
+                            NavigationLink(value: deck) {
+                                DeckRow(deck: deck)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            ExpandableDeckRow(
+                                deck: deck,
+                                isExpanded: expandedDeckIDs.contains(deck.id),
+                                onToggle: { toggle(deck) }
+                            )
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        ExpandableDeckRow(
-                            deck: deck,
-                            isExpanded: expandedDeckIDs.contains(deck.id),
-                            onToggle: { toggle(deck) }
-                        )
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        let searching = !searchText.isEmpty
+        VStack(spacing: Metrics.spaceSm) {
+            Image(systemName: searching ? "magnifyingglass" : "square.stack.3d.up.slash")
+                .font(.system(size: 34))
+                .foregroundStyle(Palette.textMuted)
+            Text(searching ? "No decks match your search" : "No decks yet")
+                .font(AppFont.headlineSm)
+                .foregroundStyle(Palette.textPrimary)
+            Text(searching
+                 ? "Try a different name or tag."
+                 : "Pull decks from AnkiWeb in the Sync tab to get started.")
+                .font(AppFont.bodySm)
+                .foregroundStyle(Palette.textSecondary)
+                .multilineTextAlignment(.center)
+            if !searching {
+                Button("Go to Sync", action: onOpenSync)
+                    .font(AppFont.labelMd)
+                    .foregroundStyle(Palette.primary)
+                    .padding(.top, Metrics.space2xs)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Metrics.space2xl)
     }
 
     private func toggle(_ deck: Deck) {
