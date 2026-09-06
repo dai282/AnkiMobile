@@ -22,13 +22,16 @@ struct DecksView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    /// Daily queue only reflects decks you can actually study (i.e. downloaded ones).
     private var aggregate: QueueCounts {
-        topLevelDecks.reduce(into: QueueCounts()) { total, deck in
-            let counts = deck.counts()
-            total.new += counts.new
-            total.learning += counts.learning
-            total.review += counts.review
-        }
+        topLevelDecks
+            .filter { $0.isDownloaded }
+            .reduce(into: QueueCounts()) { total, deck in
+                let counts = deck.counts()
+                total.new += counts.new
+                total.learning += counts.learning
+                total.review += counts.review
+            }
     }
 
     private var filteredDecks: [Deck] {

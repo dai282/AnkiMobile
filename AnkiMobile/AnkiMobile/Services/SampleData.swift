@@ -3,7 +3,8 @@
 //  AnkiMobile
 //
 //  Seeds a set of realistic decks and cards on first launch so the app is
-//  immediately usable. Counts roughly match the design mockups.
+//  immediately usable. Includes two top-level decks — one downloaded and one
+//  "Cloud Only" — to demonstrate the download-gated study flow.
 //
 
 import Foundation
@@ -21,11 +22,11 @@ enum SampleData {
     static func seed(_ context: ModelContext) {
         let now = Date.now
 
-        // Medical & USMLE Step 1 (parent) with two subdecks.
+        // Parent deck 1 — DOWNLOADED — with two subdecks.
         let medical = Deck(name: "Medical & USMLE Step 1",
                            subtitle: "2 subdecks • High cadence",
                            iconSystemName: "cross.case.fill",
-                           isHighCadence: true, isDownloaded: false, sizeMB: 38, sortOrder: 0)
+                           isHighCadence: true, isDownloaded: true, sizeMB: 26.2, sortOrder: 0)
         let pharma = Deck(name: "Pharmacology",
                           subtitle: "Medical :: Pharmacology",
                           iconSystemName: "pills.fill",
@@ -34,27 +35,40 @@ enum SampleData {
                          subtitle: "Medical :: Pathology",
                          iconSystemName: "allergens",
                          isHighCadence: true, isDownloaded: true, sizeMB: 12, sortOrder: 1, parent: medical)
+        medical.lastStudied = now.addingDays(-1)
 
+        // Parent deck 2 — CLOUD ONLY (not downloaded) — with two subdecks.
+        let language = Deck(name: "Language Learning",
+                            subtitle: "2 subdecks • Cloud Only",
+                            iconSystemName: "globe",
+                            isHighCadence: false, isDownloaded: false, sizeMB: 38, sortOrder: 1)
+        let japanese = Deck(name: "Japanese (JLPT N2)",
+                            subtitle: "Language :: Japanese",
+                            iconSystemName: "character.book.closed.fill",
+                            isHighCadence: false, isDownloaded: false, sizeMB: 22, sortOrder: 0, parent: language)
+        let mandarin = Deck(name: "Mandarin Chinese (HSK 4)",
+                            subtitle: "Language :: Mandarin",
+                            iconSystemName: "character.bubble.fill",
+                            isHighCadence: false, isDownloaded: false, sizeMB: 16, sortOrder: 1, parent: language)
+
+        // A downloaded top-level deck with no subdecks.
         let cs = Deck(name: "Computer Science & Algorithms",
                       subtitle: "Data structures & complexity",
                       iconSystemName: "terminal.fill",
-                      isHighCadence: false, isDownloaded: true, sizeMB: 12, sortOrder: 1)
-        let jp = Deck(name: "Japanese Vocabulary (JLPT N2)",
-                      subtitle: "Grammar & Kanji Retention",
-                      iconSystemName: "character.book.closed.fill",
-                      isHighCadence: false, isDownloaded: false, sizeMB: 38, sortOrder: 2)
+                      isHighCadence: false, isDownloaded: true, sizeMB: 12, sortOrder: 2)
 
-        [medical, pharma, patho, cs, jp].forEach { context.insert($0) }
-        medical.lastStudied = now.addingDays(-1)
+        [medical, pharma, patho, language, japanese, mandarin, cs].forEach { context.insert($0) }
 
         populate(pharma, context: context, new: 12, learning: 6, review: 45,
                  topic: "Pharmacology", now: now, authored: Self.pharmaCards)
         populate(patho, context: context, new: 18, learning: 4, review: 60,
                  topic: "Pathology", now: now, authored: Self.pathoCards)
+        populate(japanese, context: context, new: 4, learning: 6, review: 35,
+                 topic: "Japanese", now: now, authored: Self.jpCards)
+        populate(mandarin, context: context, new: 10, learning: 3, review: 20,
+                 topic: "Mandarin", now: now, authored: Self.mandarinCards)
         populate(cs, context: context, new: 8, learning: 2, review: 24,
                  topic: "Algorithms", now: now, authored: Self.csCards)
-        populate(jp, context: context, new: 4, learning: 6, review: 35,
-                 topic: "Japanese", now: now, authored: Self.jpCards)
 
         try? context.save()
     }
@@ -147,5 +161,14 @@ enum SampleData {
         ("Difference between は and が (topic vs subject)?",
          "は marks the topic (known/contextual), が marks the grammatical subject (new information or emphasis).",
          ["Grammar"]),
+    ]
+
+    private static let mandarinCards: [Authored] = [
+        ("你好 (nǐ hǎo) means?",
+         "\"Hello.\" The standard everyday greeting.",
+         ["Vocabulary"]),
+        ("What are the four Mandarin tones?",
+         "1st: high level (ā), 2nd: rising (á), 3rd: dipping (ǎ), 4th: falling (à) — plus a neutral tone.",
+         ["Pronunciation"]),
     ]
 }

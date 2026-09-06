@@ -133,3 +133,9 @@ Status: [ ] todo · [~] in progress · [x] done
 - Real Manrope / JetBrains Mono fonts can be bundled later; using system fonts now to avoid
   bundling font files.
 - "Pull decks" in v1 adds a couple of extra sample decks to demonstrate the flow.
+- **Download model:** downloading is a top-level-deck operation — you cannot partially
+  download a subdeck. Subdecks inherit the parent's downloaded state. Only downloaded decks
+  are studyable and only they count toward the daily queue. Download & "pull cards" actions
+  live on the top-level deck; subdecks show Study only (or a prompt to download the parent).
+- Seed data ships two parent decks — one downloaded (Medical), one Cloud Only (Language
+  Learning) — to visually compare the two states.

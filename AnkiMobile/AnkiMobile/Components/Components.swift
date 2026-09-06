@@ -90,18 +90,20 @@ struct SegmentedProgressBar: View {
 struct StoragePill: View {
     let deck: Deck
 
+    private var downloaded: Bool { deck.isEffectivelyDownloaded }
+
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: deck.isDownloaded ? "checkmark.icloud.fill" : "icloud")
+            Image(systemName: downloaded ? "checkmark.icloud.fill" : "icloud")
                 .font(.system(size: 11))
             Text(label)
                 .font(AppFont.labelSm)
         }
-        .foregroundStyle(deck.isDownloaded ? Palette.success : Palette.textMuted)
+        .foregroundStyle(downloaded ? Palette.success : Palette.textMuted)
         .padding(.horizontal, Metrics.spaceXs)
         .padding(.vertical, 3)
         .background(
-            (deck.isDownloaded ? Palette.success.opacity(0.12) : Palette.surfaceLow),
+            (downloaded ? Palette.success.opacity(0.12) : Palette.surfaceLow),
             in: Capsule()
         )
         .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
@@ -109,7 +111,7 @@ struct StoragePill: View {
 
     private var label: String {
         let size = String(format: "%.0f MB", deck.sizeMB)
-        return deck.isDownloaded ? "Downloaded (\(size))" : "Cloud Only (\(size))"
+        return downloaded ? "Downloaded (\(size))" : "Cloud Only (\(size))"
     }
 }
 

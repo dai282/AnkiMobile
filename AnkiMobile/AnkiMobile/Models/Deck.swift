@@ -85,14 +85,23 @@ extension Deck {
         cards + subdecks.flatMap { $0.allCards }
     }
 
-    /// Cards actually available to study — only from downloaded decks.
-    /// A "Cloud Only" deck contributes no studyable cards until it is downloaded.
-    var studyableCards: [Card] {
-        (isDownloaded ? cards : []) + subdecks.flatMap { $0.studyableCards }
+    /// The top-level ancestor. Download state is decided here — a subdeck cannot be
+    /// downloaded independently of its parent.
+    var rootDeck: Deck {
+        var deck = self
+        while let parent = deck.parent { deck = parent }
+        return deck
     }
 
-    /// True when there is at least one downloaded card to study in this deck tree.
-    var isStudyable: Bool { !studyableCards.isEmpty }
+    /// Whether this deck is available offline, following the top-level deck's download
+    /// state (subdecks inherit it).
+    var isEffectivelyDownloaded: Bool { rootDeck.isDownloaded }
+
+    /// Cards actually available to study — only when the top-level deck is downloaded.
+    var studyableCards: [Card] { isEffectivelyDownloaded ? allCards : [] }
+
+    /// True when the deck is downloaded and has at least one card.
+    var isStudyable: Bool { isEffectivelyDownloaded && !allCards.isEmpty }
 
     /// Counts of due/new cards across this deck and its subdecks.
     func counts(asOf now: Date = .now) -> QueueCounts {

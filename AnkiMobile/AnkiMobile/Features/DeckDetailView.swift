@@ -25,13 +25,25 @@ struct DeckDetailView: View {
         max(1, Int((Double(counts.total) * 0.4).rounded()))
     }
 
+    /// A subdeck whose parent hasn't been downloaded — can't be studied here.
+    private var isLockedSubdeck: Bool {
+        !deck.isTopLevel && !deck.isEffectivelyDownloaded
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: Metrics.spaceMd) {
                 identityBanner
-                queueBreakdown
-                studySection
-                syncCard
+                if isLockedSubdeck {
+                    lockedSubdeckPrompt
+                } else {
+                    queueBreakdown
+                    studySection
+                }
+                // Download & pull live only on a downloaded top-level deck.
+                if deck.isTopLevel && deck.isDownloaded {
+                    syncCard
+                }
             }
             .padding(.horizontal, Metrics.screenMargin)
             .padding(.vertical, Metrics.spaceMd)
@@ -130,15 +142,53 @@ struct DeckDetailView: View {
         .background(Palette.surfaceLow, in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous))
     }
 
-    // MARK: Study section (study when downloaded, otherwise a download prompt)
+    // MARK: Study section
 
+    /// Shown on a top-level deck: study when downloaded, otherwise offer to download.
     @ViewBuilder
     private var studySection: some View {
-        if deck.isStudyable {
+        if deck.isEffectivelyDownloaded {
             studyActions
         } else {
             downloadCTA
         }
+    }
+
+    /// Shown on a subdeck whose parent isn't downloaded — points the user to the parent.
+    private var lockedSubdeckPrompt: some View {
+        VStack(alignment: .leading, spacing: Metrics.spaceSm) {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.icloud")
+                    .foregroundStyle(Palette.textMuted)
+                Text("Part of a Cloud Only deck")
+                    .font(AppFont.headlineSm)
+                    .foregroundStyle(Palette.textPrimary)
+            }
+            Text("Sub-decks download together with their parent. Download \(deck.rootDeck.name) to study this deck.")
+                .font(AppFont.bodySm)
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let parent = deck.parent {
+                NavigationLink(value: parent) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.forward.square")
+                        Text("Open \(parent.name)")
+                    }
+                    .font(AppFont.labelMd)
+                    .foregroundStyle(Palette.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Palette.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous)
+                            .strokeBorder(Palette.primary.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .surfaceCard(cornerRadius: Metrics.radiusCard)
     }
 
     private var downloadCTA: some View {
