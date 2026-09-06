@@ -1,0 +1,318 @@
+//
+//  SyncView.swift
+//  AnkiMobile
+//
+//  Screen 5 — AnkiWeb Sync & Account. Mocked in v1: the two cloud actions
+//  (Pull Decks, Sync Progress) run against MockCloudService, not a real server.
+//
+
+import SwiftUI
+import SwiftData
+
+private struct ActivityEntry: Identifiable {
+    enum Kind { case progress, deck }
+    let id = UUID()
+    let kind: Kind
+    let title: String
+    let detail: String
+    let time: String
+}
+
+struct SyncView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    @AppStorage("fullOfflineMode") private var fullOfflineMode = true
+    @AppStorage("mediaSyncing") private var mediaSyncing = true
+
+    @State private var isSyncing = false
+    @State private var isPulling = false
+    @State private var syncProgress: Double = 0
+    @State private var syncStageText = ""
+    @State private var lastSync = "Today at 09:37"
+    @State private var activity: [ActivityEntry] = [
+        ActivityEntry(kind: .progress, title: "Progress Synced",
+                      detail: "42 reviews synced, scheduling intervals updated across 3 decks · 0.8s",
+                      time: "09:37:12"),
+        ActivityEntry(kind: .deck, title: "Deck Updated",
+                      detail: "Medical :: Pharmacology · 8 new cards pulled from AnkiWeb · 1.4 MB",
+                      time: "08:15:04"),
+    ]
+
+    private let account = "dai.nguyen@xtracta.com"
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: Metrics.spaceMd) {
+                    profileCard
+                    cloudActions
+                    storageCard
+                    activityCard
+                    logoutButton
+                }
+                .padding(.horizontal, Metrics.screenMargin)
+                .padding(.vertical, Metrics.spaceMd)
+            }
+            .background(Palette.canvas.ignoresSafeArea())
+            .navigationTitle("Sync & Account")
+        }
+    }
+
+    // MARK: Profile
+
+    private var profileCard: some View {
+        VStack(alignment: .leading, spacing: Metrics.spaceSm) {
+            HStack(spacing: Metrics.spaceSm) {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Palette.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Palette.primary.opacity(0.18), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account)
+                        .font(AppFont.headlineSm)
+                        .foregroundStyle(Palette.textPrimary)
+                        .lineLimit(1)
+                    HStack(spacing: 5) {
+                        Circle().fill(Palette.success).frame(width: 6, height: 6)
+                        Text("Connected · \(lastSync)")
+                            .font(AppFont.labelSm)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                }
+                Spacer()
+            }
+
+            if isSyncing {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(syncStageText).font(AppFont.monoSm).foregroundStyle(Palette.textSecondary)
+                        Spacer()
+                        Text("\(Int(syncProgress * 100))%").font(AppFont.monoSm).foregroundStyle(Palette.textSecondary)
+                    }
+                    ProgressView(value: syncProgress)
+                        .tint(Palette.success)
+                }
+            }
+        }
+        .surfaceCard(cornerRadius: Metrics.radiusCard)
+    }
+
+    // MARK: Cloud actions (the two things v1 does)
+
+    private var cloudActions: some View {
+        VStack(spacing: Metrics.spaceXs) {
+            Button(action: syncNow) {
+                actionLabel(isSyncing ? "Synchronizing…" : "Sync Progress",
+                            system: "arrow.triangle.2.circlepath",
+                            spinning: isSyncing,
+                            filled: true)
+            }
+            .disabled(isSyncing || isPulling)
+
+            Button(action: pullDecks) {
+                actionLabel(isPulling ? "Pulling decks…" : "Pull Decks from Cloud",
+                            system: "icloud.and.arrow.down",
+                            spinning: isPulling,
+                            filled: false)
+            }
+            .disabled(isSyncing || isPulling)
+        }
+    }
+
+    private func actionLabel(_ title: String, system: String, spinning: Bool, filled: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: system)
+                .rotationEffect(.degrees(spinning ? 360 : 0))
+                .animation(spinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: spinning)
+            Text(title)
+        }
+        .font(AppFont.headlineSm)
+        .foregroundStyle(filled ? Palette.canvas : Palette.primary)
+        .frame(maxWidth: .infinity)
+        .frame(height: Metrics.touchComfortable)
+        .background(
+            filled ? AnyShapeStyle(Palette.primary) : AnyShapeStyle(Palette.primary.opacity(0.15)),
+            in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous)
+                .strokeBorder(filled ? .clear : Palette.primary.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    // MARK: Storage
+
+    private var storageCard: some View {
+        VStack(spacing: 0) {
+            SectionHeader(title: "Offline & Storage")
+                .padding(.bottom, Metrics.spaceXs)
+
+            VStack(spacing: 0) {
+                toggleRow(
+                    title: "Full Offline Mode",
+                    subtitle: "Keep all decks and media cached locally for zero-latency studying.",
+                    isOn: $fullOfflineMode
+                )
+                Divider().overlay(Palette.hairline)
+                toggleRow(
+                    title: "Media Syncing",
+                    subtitle: "Enabled on Wi-Fi and cellular networks.",
+                    isOn: $mediaSyncing
+                )
+                Divider().overlay(Palette.hairline)
+                cacheRow
+            }
+            .surfaceCard(padding: 0, cornerRadius: Metrics.radiusCard)
+        }
+    }
+
+    private func toggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .top, spacing: Metrics.spaceSm) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(AppFont.labelMd).foregroundStyle(Palette.textPrimary)
+                Text(subtitle).font(AppFont.bodySm).foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: isOn).labelsHidden().tint(Palette.success)
+        }
+        .padding(Metrics.spaceMd)
+    }
+
+    private var cacheRow: some View {
+        VStack(alignment: .leading, spacing: Metrics.spaceSm) {
+            HStack {
+                Text("Cache Allocation").font(AppFont.bodySm).foregroundStyle(Palette.textPrimary)
+                Spacer()
+                Text("84.2 MB / 1.2 GB").font(AppFont.monoSm).foregroundStyle(Palette.primary)
+            }
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    Palette.primary.frame(width: geo.size.width * 0.07)
+                    Palette.success.frame(width: geo.size.width * 0.18)
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(height: 6)
+            .background(Palette.surfaceElevated)
+            .clipShape(Capsule())
+            HStack {
+                legendDot(Palette.primary, "DB 8.2MB")
+                legendDot(Palette.success, "Media 76MB")
+                Spacer()
+                Button("Prune Cache") {}
+                    .font(AppFont.labelSm)
+                    .foregroundStyle(Palette.primary)
+            }
+        }
+        .padding(Metrics.spaceMd)
+        .background(Palette.surfaceLow.opacity(0.7))
+    }
+
+    private func legendDot(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(AppFont.monoSm).foregroundStyle(Palette.textSecondary)
+        }
+        .padding(.trailing, Metrics.spaceSm)
+    }
+
+    // MARK: Activity
+
+    private var activityCard: some View {
+        VStack(spacing: 0) {
+            SectionHeader(title: "Recent Activity")
+                .padding(.bottom, Metrics.spaceXs)
+            VStack(spacing: 0) {
+                ForEach(Array(activity.enumerated()), id: \.element.id) { pair in
+                    if pair.offset > 0 { Divider().overlay(Palette.hairline) }
+                    activityRow(pair.element)
+                }
+            }
+            .surfaceCard(padding: 0, cornerRadius: Metrics.radiusCard)
+        }
+    }
+
+    private func activityRow(_ entry: ActivityEntry) -> some View {
+        let isProgress = entry.kind == .progress
+        let color = isProgress ? Palette.success : Palette.primary
+        let icon = isProgress ? "checkmark.circle.fill" : "icloud.and.arrow.down"
+        return HStack(alignment: .top, spacing: Metrics.spaceSm) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(color)
+                .frame(width: 28, height: 28)
+                .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: Metrics.radiusSmall, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(entry.title).font(AppFont.labelMd).foregroundStyle(Palette.textPrimary)
+                    Spacer()
+                    Text(entry.time).font(AppFont.monoSm).foregroundStyle(Palette.textMuted)
+                }
+                Text(entry.detail).font(AppFont.bodySm).foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(Metrics.spaceMd)
+    }
+
+    private var logoutButton: some View {
+        Button {} label: {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                Text("Log Out")
+            }
+            .font(AppFont.labelMd)
+            .foregroundStyle(Palette.critical)
+            .frame(maxWidth: .infinity)
+            .frame(height: Metrics.touchComfortable)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous)
+                    .strokeBorder(Palette.critical.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .padding(.top, Metrics.spaceXs)
+    }
+
+    // MARK: Actions
+
+    private func syncNow() {
+        isSyncing = true
+        syncProgress = 0
+        Task {
+            let summary = await MockCloudService.syncProgress(context: modelContext) { stage in
+                withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
+            }
+            isSyncing = false
+            lastSync = "Just now"
+            activity.insert(
+                ActivityEntry(kind: .progress, title: "Progress Synced",
+                              detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks · \(String(format: "%.1f", summary.duration))s",
+                              time: "now"),
+                at: 0
+            )
+        }
+    }
+
+    private func pullDecks() {
+        isPulling = true
+        Task {
+            let deck = await MockCloudService.pullDecks(context: modelContext)
+            isPulling = false
+            activity.insert(
+                ActivityEntry(kind: .deck, title: "Deck Updated",
+                              detail: "\(deck.name) · 8 new cards pulled from AnkiWeb · 5.4 MB",
+                              time: "now"),
+                at: 0
+            )
+        }
+    }
+}
+
+#Preview {
+    SyncView()
+        .modelContainer(sampleContainer())
+        .preferredColorScheme(.dark)
+}
