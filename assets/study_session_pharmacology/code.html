@@ -1,0 +1,314 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "background": "#121316",
+          "tertiary": "#fdb96f",
+          "on-secondary-container": "#d1ffe3",
+          "on-error": "#690005",
+          "on-background": "#e3e2e6",
+          "inverse-primary": "#005bc1",
+          "tertiary-container": "#c18440",
+          "tertiary-fixed": "#ffdcbc",
+          "on-primary-fixed": "#001a41",
+          "secondary-fixed-dim": "#75daa8",
+          "on-surface": "#e3e2e6",
+          "on-primary-container": "#00285c",
+          "surface-container-low": "#1a1b1f",
+          "primary-fixed-dim": "#adc6ff",
+          "on-surface-variant": "#c2c6d5",
+          "surface-container-lowest": "#0d0e11",
+          "error": "#ffb4ab",
+          "inverse-on-surface": "#2f3033",
+          "tertiary-fixed-dim": "#fdb96f",
+          "on-primary-fixed-variant": "#004494",
+          "on-secondary": "#003823",
+          "inverse-surface": "#e3e2e6",
+          "outline": "#8c909e",
+          "surface-variant": "#343538",
+          "primary-fixed": "#d8e2ff",
+          "surface-dim": "#121316",
+          "surface-bright": "#38393c",
+          "on-tertiary-fixed": "#2c1700",
+          "secondary-container": "#008056",
+          "on-tertiary-fixed-variant": "#683c00",
+          "surface-container": "#1f1f23",
+          "on-secondary-fixed-variant": "#005235",
+          "secondary": "#75daa8",
+          "on-secondary-fixed": "#002113",
+          "surface-container-highest": "#343538",
+          "on-tertiary-container": "#402300",
+          "outline-variant": "#424753",
+          "primary-container": "#528ff9",
+          "surface": "#16171a",
+          "error-container": "#93000a",
+          "primary": "#adc6ff",
+          "on-primary": "#002e69",
+          "surface-container-high": "#24262e",
+          "surface-tint": "#adc6ff",
+          "secondary-fixed": "#92f7c3",
+          "on-error-container": "#ffdad6",
+          "on-tertiary": "#492900"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.25rem",
+          "lg": "0.5rem",
+          "xl": "0.75rem",
+          "full": "9999px"
+        },
+        "spacing": {
+          "space-2xl": "2rem",
+          "margin-mobile": "1rem",
+          "space-lg": "1.25rem",
+          "space-2xs": "0.25rem",
+          "margin-tablet": "1.5rem",
+          "space-md": "1rem",
+          "space-xs": "0.5rem",
+          "space-3xl": "2.5rem",
+          "space-sm": "0.75rem",
+          "space-xl": "1.5rem",
+          "gutter": "0.75rem",
+          "touch-comfortable": "52px",
+          "touch-min": "44px"
+        },
+        "fontFamily": {
+          "headline-sm": ["Manrope", "sans-serif"],
+          "headline-md": ["Manrope", "sans-serif"],
+          "body-lg": ["Manrope", "sans-serif"],
+          "mono-metric-sm": ["JetBrains Mono", "monospace"],
+          "display": ["Manrope", "sans-serif"],
+          "body-md": ["Manrope", "sans-serif"],
+          "body-sm": ["Manrope", "sans-serif"],
+          "headline-lg": ["Manrope", "sans-serif"],
+          "label-md": ["Manrope", "sans-serif"],
+          "label-sm": ["Manrope", "sans-serif"],
+          "mono-metric": ["JetBrains Mono", "monospace"]
+        },
+        "fontSize": {
+          "headline-sm": ["17px", { "lineHeight": "22px", "letterSpacing": "-0.005em", "fontWeight": "600" }],
+          "headline-md": ["20px", { "lineHeight": "26px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+          "body-lg": ["19px", { "lineHeight": "28px", "letterSpacing": "-0.005em", "fontWeight": "400" }],
+          "mono-metric-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0em", "fontWeight": "400" }],
+          "display": ["34px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+          "body-md": ["16px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400" }],
+          "body-sm": ["14px", { "lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400" }],
+          "headline-lg": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+          "label-md": ["13px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+          "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+          "mono-metric": ["13px", { "lineHeight": "16px", "letterSpacing": "-0.01em", "fontWeight": "500" }]
+        }
+      }
+    }
+  };
+</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+  </style>
+</head><body class="bg-[#16171a] font-body-md text-[#e3e2e6] flex flex-col min-h-screen antialiased"><header class="fixed top-0 inset-x-0 z-50 bg-[#16171a]/90 backdrop-blur-xl border-b border-white/[0.04] pt-safe"><div class="flex justify-between items-center px-6 h-5 pt-1 text-[13px] font-semibold text-[#c2c6d5] select-none"><span class="">9:41</span><div class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[15px]">signal_cellular_4_bar</span><span class="material-symbols-outlined text-[15px]">wifi</span><span class="material-symbols-outlined text-[18px]">battery_full</span></div></div><div class="h-16 px-4 flex items-center justify-between"><div class="flex items-center gap-2"><button class="w-touch-min h-touch-min flex items-center justify-center text-primary active:opacity-70 transition-opacity" onclick="history.back()"><span class="material-symbols-outlined text-[22px]">arrow_back_ios_new</span></button><h1 class="font-headline-sm text-headline-sm text-[#e3e2e6] tracking-tight">Study</h1></div><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-[#24262e] border border-white/[0.08] flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 bg-[#16171a] pb-safe"><div class="flex flex-col w-full select-none">
+<!-- Top Study Bar & Queue Metas -->
+<section class="px-4 pt-3 pb-3 flex flex-col gap-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5 min-w-0">
+<button aria-label="Back to Decks" class="w-8 h-8 rounded-lg bg-[#24262e] border border-white/[0.06] flex items-center justify-center text-[#c2c6d5] active:scale-95 transition-transform" type="button">
+<span class="material-symbols-outlined text-[18px]">folder</span>
+</button>
+<div class="flex flex-col min-w-0">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-outline text-[10px]">Study Session</span>
+<h2 class="font-headline-sm text-headline-sm text-[#e3e2e6] truncate tracking-tight">Medical :: Pharmacology</h2>
+</div>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1c1d22] border border-white/[0.05] text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-label-sm text-label-sm text-[11px] font-medium tracking-normal text-[#c2c6d5]">Offline Mode Active</span>
+</div>
+</div>
+<!-- Counters & Progress Segment -->
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#1f2330] border border-primary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+<span class="font-mono-metric text-mono-metric font-semibold text-primary">12</span>
+<span class="font-label-sm text-label-sm text-[10px] text-primary/70">New</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2d2218] border border-tertiary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-mono-metric text-mono-metric font-semibold text-tertiary">5</span>
+<span class="font-label-sm text-label-sm text-[10px] text-tertiary/70">Learn</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#172720] border border-secondary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="font-mono-metric text-mono-metric font-semibold text-secondary">38</span>
+<span class="font-label-sm text-label-sm text-[10px] text-secondary/70">Due</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-mono-metric-sm text-mono-metric-sm text-outline">Card 55/120</span>
+<div class="w-14 h-1.5 rounded-full bg-[#24262e] overflow-hidden">
+<div class="w-[46%] h-full rounded-full bg-secondary"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Flashcard Arena -->
+<section class="px-4 pb-3 flex flex-col items-center">
+<div class="w-full rounded-xl bg-[#1c1d22] border border-white/[0.06] shadow-2xl flex flex-col p-5 relative transition-all duration-200">
+<!-- Card Toolbar Quick Actions -->
+<div class="flex items-center justify-between pb-3 border-b border-white/[0.05]">
+<div class="flex items-center gap-1.5">
+<span class="px-2.5 py-1 rounded-md bg-[#24262e] text-[#c2c6d5] border border-white/[0.04] font-mono-metric-sm text-[11px]">#Endocrinology</span>
+<span class="px-2.5 py-1 rounded-md bg-[#24262e] text-[#c2c6d5] border border-white/[0.04] font-mono-metric-sm text-[11px]">#Renal</span>
+</div>
+<div class="flex items-center gap-1">
+<button aria-label="Play pronunciation audio" class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-primary active:scale-90 transition hover:bg-[#24262e]" id="audio-btn" type="button">
+<span class="material-symbols-outlined text-[19px]">volume_up</span>
+</button>
+<button aria-label="Mark card with star" class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-tertiary active:scale-90 transition hover:bg-[#24262e]" id="star-btn" type="button">
+<span class="material-symbols-outlined text-[19px]">star</span>
+</button>
+<button aria-label="Flag card" class="w-8 h-8 rounded-lg flex items-center justify-center text-outline hover:text-error active:scale-90 transition hover:bg-[#24262e]" id="flag-btn" type="button">
+<span class="material-symbols-outlined text-[19px]">flag</span>
+</button>
+</div>
+</div>
+<!-- Question / Front -->
+<div class="py-3">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-outline block mb-1 text-[11px]">PROMPT</span>
+<h3 class="font-headline-md text-headline-md text-[#f1f0f4] font-semibold tracking-tight leading-snug">
+          Mechanism of Action of SGLT-2 Inhibitors <span class="text-[#a6abbd] font-normal text-body-sm block mt-1">(e.g., Dapagliflozin, Empagliflozin)?</span>
+</h3>
+</div>
+<!-- Luminous Separator -->
+<div class="my-3 relative flex items-center justify-center">
+<div class="w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+<div class="absolute px-3 py-0.5 rounded-full bg-[#24262e] border border-primary/25 shadow-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-[13px]">visibility</span>
+<span class="font-label-sm text-[10px] text-primary tracking-wider font-semibold">ANSWER REVEALED</span>
+</div>
+</div>
+<!-- Answer / Back -->
+<div class="pt-1 flex flex-col gap-3.5">
+<p class="font-body-md text-body-md text-[#ecebef] leading-relaxed">
+          Inhibits <strong class="text-primary font-semibold">Sodium-Glucose Cotransporter 2</strong> in the renal proximal convoluted tubule, blocking glucose and sodium reabsorption, promoting <span class="text-secondary font-semibold">glucosuria</span> and <span class="text-secondary font-semibold">natriuresis</span>.
+        </p>
+<div class="rounded-lg bg-[#24262e]/80 border border-white/[0.04] p-3.5 flex flex-col gap-2.5">
+<div class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-secondary text-[18px] shrink-0 mt-0.5">check_circle</span>
+<p class="font-body-sm text-body-sm text-[#d4d3d8] leading-normal">
+              Reduces HbA1c (~0.5–1.0%), promotes moderate body weight reduction (~2–3 kg), and lowers systolic BP via osmotic diuresis.
+            </p>
+</div>
+<div class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">shield</span>
+<p class="font-body-sm text-body-sm text-[#d4d3d8] leading-normal">
+              Distinct cardioprotective and nephroprotective benefits in Heart Failure with reduced Ejection Fraction (HFrEF) and Chronic Kidney Disease (CKD).
+            </p>
+</div>
+</div>
+<!-- Embedded Diagram Representation -->
+<div class="rounded-lg bg-[#16171a] border border-white/[0.05] p-3 flex items-center justify-between">
+<div class="flex flex-col min-w-0 pr-2">
+<span class="font-label-sm text-label-sm text-outline text-[11px]">Target Anatomical Site</span>
+<span class="font-body-sm font-semibold text-[#e3e2e6] text-sm truncate mt-0.5">Renal Proximal Tubule (S1 Segment)</span>
+<span class="font-body-sm text-xs text-[#a6abbd] mt-0.5">Afferent arteriolar tone restoration &amp; intraglomerular pressure reduction</span>
+</div>
+<div class="w-11 h-11 rounded-lg bg-[#24262e] border border-white/[0.06] flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[24px]">water_drop</span>
+</div>
+</div>
+</div>
+<!-- Quick Feedback Toast Container -->
+<div class="opacity-0 transition-opacity duration-200 pointer-events-none absolute bottom-4 inset-x-4 py-2 px-3 rounded-lg bg-primary-container text-on-primary-container font-label-md text-center shadow-lg border border-primary/20" id="toast">
+        Interval applied
+      </div>
+</div>
+</section>
+<!-- Bottom Spaced-Repetition Tray -->
+<footer class="mt-auto px-4 pb-8 pt-3 flex flex-col gap-2.5 bg-[#16171a]/95 backdrop-blur-xl border-t border-white/[0.04]">
+<div class="flex items-center justify-between px-1">
+
+<div class="flex items-center gap-2">
+
+</div>
+</div>
+<!-- 4 Grading Action Buttons -->
+<div class="grid grid-cols-4 gap-2 w-full">
+<!-- 1. Again -->
+<button class="h-touch-comfortable rounded-lg bg-[#2b1f1f]/80 border border-error/20 hover:border-error/40 active:bg-error-container/30 active:scale-95 transition-all flex flex-col items-center justify-center p-1 group" onclick="handleRate('again')" type="button">
+<span class="font-mono-metric-sm text-[11px] text-[#ffb4ab]/80 group-hover:underline block leading-none">&lt;1m</span>
+<span class="font-label-md text-label-md text-[#ffb4ab] font-medium block mt-1 leading-none">Again</span>
+</button>
+<!-- 2. Hard -->
+<button class="h-touch-comfortable rounded-lg bg-[#24262e] border border-white/[0.08] hover:border-white/[0.16] active:bg-[#2e313b] active:scale-95 transition-all flex flex-col items-center justify-center p-1 group" onclick="handleRate('hard')" type="button">
+<span class="font-mono-metric-sm text-[11px] text-outline block leading-none">12m</span>
+<span class="font-label-md text-label-md text-[#e3e2e6] font-medium block mt-1 leading-none">Hard</span>
+</button>
+<!-- 3. Good (Primary Target) -->
+<button class="h-touch-comfortable rounded-lg bg-[#1c3328] border border-secondary/30 hover:border-secondary/50 active:bg-secondary-container/40 active:scale-95 transition-all flex flex-col items-center justify-center p-1 shadow-sm group" onclick="handleRate('good')" type="button">
+<span class="font-mono-metric-sm text-[11px] text-secondary/80 group-hover:underline block leading-none">1d</span>
+<span class="font-label-md text-label-md text-secondary font-semibold block mt-1 leading-none">Good</span>
+</button>
+<!-- 4. Easy -->
+<button class="h-touch-comfortable rounded-lg bg-[#1e2638] border border-primary/25 hover:border-primary/45 active:bg-primary-container/30 active:scale-95 transition-all flex flex-col items-center justify-center p-1 group" onclick="handleRate('easy')" type="button">
+<span class="font-mono-metric-sm text-[11px] text-primary/80 block leading-none">4d</span>
+<span class="font-label-md text-label-md text-primary font-medium block mt-1 leading-none">Easy</span>
+</button>
+</div>
+</footer>
+</div>
+<script>
+  function handleRate(ease) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    const labels = {
+      again: 'Card rescheduled in <1 minute',
+      hard: 'Card rescheduled in 12 minutes',
+      good: 'Well done! Due in 1 day',
+      easy: 'Excellent! Promoted to 4 days'
+    };
+    toast.textContent = labels[ease] || 'Interval saved';
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    setTimeout(() => {
+      toast.classList.remove('opacity-100');
+      toast.classList.add('opacity-0');
+    }, 1200);
+  }
+
+  const starBtn = document.getElementById('star-btn');
+  if (starBtn) {
+    starBtn.addEventListener('click', () => {
+      const icon = starBtn.querySelector('.material-symbols-outlined');
+      const isFilled = icon.style.fontVariationSettings?.includes("'FILL' 1");
+      icon.style.fontVariationSettings = isFilled ? "'FILL' 0" : "'FILL' 1";
+      starBtn.classList.toggle('text-tertiary', !isFilled);
+    });
+  }
+
+  const flagBtn = document.getElementById('flag-btn');
+  if (flagBtn) {
+    flagBtn.addEventListener('click', () => {
+      const icon = flagBtn.querySelector('.material-symbols-outlined');
+      const isFilled = icon.style.fontVariationSettings?.includes("'FILL' 1");
+      icon.style.fontVariationSettings = isFilled ? "'FILL' 0" : "'FILL' 1";
+      flagBtn.classList.toggle('text-error', !isFilled);
+    });
+  }
+
+  const audioBtn = document.getElementById('audio-btn');
+  if (audioBtn) {
+    audioBtn.addEventListener('click', () => {
+      audioBtn.classList.add('scale-125', 'text-primary');
+      setTimeout(() => {
+        audioBtn.classList.remove('scale-125');
+      }, 300);
+    });
+  }
+</script></main>
+
+</body></html>
