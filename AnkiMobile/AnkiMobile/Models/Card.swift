@@ -44,6 +44,15 @@ final class Card {
 
     var createdAt: Date
 
+    // MARK: Sync scaffolding (see docs/SYNC_MAPPING.md)
+    /// Anki-native integer ids, assigned lazily on first pull/sync.
+    var ankiCardId: Int? = nil
+    var ankiNoteId: Int? = nil
+    /// Update sequence number: -1 means "changed locally, not yet synced".
+    var usn: Int = -1
+    /// Last-modified time (epoch seconds), used for sync conflict resolution.
+    var mod: Int = 0
+
     @Relationship var deck: Deck?
 
     /// Type-safe accessor over `stateRaw`.
@@ -74,6 +83,13 @@ final class Card {
         self.isStarred = false
         self.isFlagged = false
         self.createdAt = .now
+        self.mod = Int(Date.now.timeIntervalSince1970)
         self.deck = deck
+    }
+
+    /// Marks the card as changed locally so the next sync will push it.
+    func markDirty(at now: Date = .now) {
+        usn = -1
+        mod = Int(now.timeIntervalSince1970)
     }
 }

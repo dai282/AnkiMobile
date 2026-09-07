@@ -21,6 +21,8 @@ struct StudyView: View {
     @State private var showingAnswer = false
     @State private var started = false
     @State private var startedWithCards = false
+    /// When the current card first appeared — used to record answer time.
+    @State private var cardShownAt = Date.now
 
     private let scheduler = Scheduler.shared
 
@@ -63,6 +65,7 @@ struct StudyView: View {
             queue = deck.studyQueue(mode: mode)
             startedWithCards = !queue.isEmpty
             started = true
+            cardShownAt = .now
         }
     }
 
@@ -244,7 +247,9 @@ struct StudyView: View {
         let intervalBefore = card.interval
 
         scheduler.apply(rating, to: card, now: .now)
+        card.markDirty()
 
+        let elapsedMs = Int(Date.now.timeIntervalSince(cardShownAt) * 1000)
         let log = ReviewLog(
             card: card,
             rating: rating,
@@ -252,7 +257,8 @@ struct StudyView: View {
             interval: card.interval,
             ease: card.ease,
             stateBefore: stateBefore,
-            stateAfter: card.state
+            stateAfter: card.state,
+            timeTakenMs: max(0, elapsedMs)
         )
         modelContext.insert(log)
         try? modelContext.save()
@@ -266,17 +272,20 @@ struct StudyView: View {
             showingAnswer = false
             index += 1
         }
+        cardShownAt = .now
     }
 
     private func toggleStar(_ card: Card) {
         Haptics.impact(.light)
         card.isStarred.toggle()
+        card.markDirty()
         try? modelContext.save()
     }
 
     private func toggleFlag(_ card: Card) {
         Haptics.impact(.light)
         card.isFlagged.toggle()
+        card.markDirty()
         try? modelContext.save()
     }
 }

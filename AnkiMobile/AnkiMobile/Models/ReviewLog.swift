@@ -29,8 +29,13 @@ final class ReviewLog {
 
     /// Denormalized card id, kept even if the card is later removed.
     var cardID: UUID
-    /// Whether this entry has been pushed to the cloud yet (used by V2 sync).
-    var synced: Bool
+    /// Milliseconds spent answering — Anki's revlog `time` (0 until we track it).
+    /// Declaration default lets SwiftData migrate existing rows.
+    var timeTakenMs: Int = 0
+    /// Anki-native revlog id (ms timestamp), assigned on sync.
+    var ankiRevlogId: Int? = nil
+    /// Update sequence number: -1 means "not yet pushed to the cloud".
+    var usn: Int = -1
 
     @Relationship var card: Card?
 
@@ -46,6 +51,7 @@ final class ReviewLog {
         ease: Double,
         stateBefore: CardState,
         stateAfter: CardState,
+        timeTakenMs: Int = 0,
         reviewedAt: Date = .now
     ) {
         self.id = UUID()
@@ -57,7 +63,8 @@ final class ReviewLog {
         self.stateBeforeRaw = stateBefore.rawValue
         self.stateAfterRaw = stateAfter.rawValue
         self.cardID = card.id
-        self.synced = false
+        self.timeTakenMs = timeTakenMs
+        self.usn = -1
         self.card = card
     }
 }

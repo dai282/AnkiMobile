@@ -12,11 +12,12 @@ struct AnkiMobileApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Deck.self, Card.self, ReviewLog.self)
+            container = try ModelContainer(for: Deck.self, Card.self, ReviewLog.self, SyncState.self)
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
         SampleData.seedIfNeeded(container.mainContext)
+        SyncState.ensure(in: container.mainContext)
     }
 
     var body: some Scene {

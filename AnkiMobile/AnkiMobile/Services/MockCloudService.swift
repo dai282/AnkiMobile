@@ -29,9 +29,9 @@ struct MockSyncEngine: SyncEngine {
             onStage(stage)
             try? await Task.sleep(for: .milliseconds(450))
         }
-        // Use unsynced review logs as the stand-in for "reviews synced".
+        // Use unsynced review logs (usn == -1) as the stand-in for "reviews synced".
         let unsynced = (try? context.fetchCount(
-            FetchDescriptor<ReviewLog>(predicate: #Predicate { !$0.synced })
+            FetchDescriptor<ReviewLog>(predicate: #Predicate { $0.usn == -1 })
         )) ?? 0
         return SyncSummary(reviewsSynced: min(unsynced, 999), decksTouched: 3, duration: 0.8)
     }
