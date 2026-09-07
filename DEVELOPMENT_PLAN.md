@@ -122,12 +122,8 @@ Status: [ ] todo · [~] in progress · [x] done
 - [ ] Full Dynamic Type — deferred: design uses fixed px sizes; needs a @ScaledMetric pass
 - [x] Verify Deck Detail + Study + Sync screens on device/simulator (Decks screen verified)
 
-### Future (post-v1)
-- [ ] Real AnkiWeb pull + progress sync
-- [ ] Media assets
-- [ ] FSRS scheduler option
-- [ ] Full Dynamic Type support (scalable font metrics)
-- [ ] Revisit Offline/Media/Cache controls (currently cosmetic — define real behavior)
+> **v1 is functionally complete** (all milestones above done; Dynamic Type deferred).
+> Everything works locally; the two cloud actions are mocked. V2 makes them real — see §6.
 
 ---
 
@@ -141,3 +137,61 @@ Status: [ ] todo · [~] in progress · [x] done
   live on the top-level deck; subdecks show Study only (or a prompt to download the parent).
 - Seed data ships two parent decks — one downloaded (Medical), one Cloud Only (Language
   Learning) — to visually compare the two states.
+
+---
+
+## 6. V2 Roadmap — Real AnkiWeb Sync
+
+**Goal:** replace the two *mocked* cloud actions with real ones against AnkiWeb — **(1) pull
+decks** and **(2) sync progress** — while keeping the app minimal and local-first. Study
+always works offline; sync is an explicit action.
+
+> ⚠️ **Reality check.** AnkiWeb's sync is an **undocumented HTTP + Protobuf protocol**, and the
+> reference implementation lives in Anki's **Rust** core (`Projects/anki/rslib/src/sync/`). We
+> will *reference* it, not port it. This is the riskiest, highest-effort part of the project;
+> the protocol can change and there is no official public API. Phased delivery below de-risks it.
+
+### Guiding decisions to confirm before starting
+- [ ] **Approach:** talk to AnkiWeb's real sync endpoints directly (reverse-engineered from
+      `rslib/src/sync`) vs. self-host an Anki sync server (`anki sync-server`) for testing first.
+      Recommended: build against a **self-hosted sync server** first, then point at AnkiWeb.
+- [ ] **Scheduler parity:** how closely must our SM-2 match Anki's so intervals don't "jump"
+      after a round-trip? Decide acceptable divergence, or adopt Anki's exact constants / FSRS.
+- [ ] **Collection ownership:** we sync a subset (decks + review progress). Confirm we won't
+      corrupt a collection also used by desktop (start read-only pull; guard the first push).
+
+### V2.0 — Foundations (no network yet)
+- [ ] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
+      on every rating — required to push progress. Currently we mutate the card in place only.
+- [ ] Introduce a `SyncEngine` protocol; keep `MockCloudService` as one implementation so the
+      UI stays testable offline.
+- [ ] **Keychain** storage for credentials/sync key (never in UserDefaults).
+- [ ] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape (study `rslib` schema).
+
+### V2.1 — Authentication
+- [ ] Real login screen (AnkiWeb email + password) → obtain sync key + assigned sync host.
+- [ ] Wire the Sync tab's account card + real **Log Out** (clear key; optional local wipe).
+- [ ] Handle auth errors (bad credentials, rate limiting, host redirect).
+
+### V2.2 — Pull decks (download, read-first)
+- [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards
+      locally (chunked/incremental where possible).
+- [ ] Replace the "Download to Study" + "Pull N cards" mocks with real progress/results.
+- [ ] Robust partial-failure handling and resumability.
+
+### V2.3 — Sync progress (two-way)
+- [ ] Push local review log + scheduling state; reconcile with remote (usn/anchor logic).
+- [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal.
+- [ ] Real activity log entries (Progress Synced / Deck Updated) from actual results.
+
+### V2.4 — Hardening
+- [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
+- [ ] Wire the currently-cosmetic **Offline Mode / Media Syncing / Prune Cache** controls, or
+      remove them if we decide media is out of scope.
+- [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
+
+### Deferred / stretch (not blocking V2)
+- [ ] Media assets (audio/images) with hash-based dedup.
+- [ ] **FSRS** scheduler option (reference `rslib/src/scheduler/fsrs`).
+- [ ] Full **Dynamic Type** support (scalable font metrics via `@ScaledMetric`).
+- [ ] iPad layout (only if desired later).
