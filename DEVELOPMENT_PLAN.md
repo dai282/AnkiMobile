@@ -173,8 +173,11 @@ always works offline; sync is an explicit action.
 - [x] Login screen (email + password + server field) and connected-account state in the Sync tab.
 - [x] `AuthController` + Keychain-backed credentials; real **Log Out** (clears Keychain).
 - [x] End-to-end login flow via `MockSyncEngine` (offline-testable; accepts any creds).
-- [ ] Real `hostKey` network call against the self-hosted server (V2.1b) — replaces mock login.
-- [ ] Handle auth errors from the server (bad credentials, rate limiting, host redirect/308).
+- [x] Real `hostKey` network call — verified against Anki's own sync server (HTTP 200).
+      Uses sync v11 wire format: `anki-sync` header + zstd(JSON) body/response. Requires the
+      `facebook/zstd` SwiftPM package (`Zstd` wrapper) and an ATS local-networking exception.
+- [x] Basic auth errors (empty fields, 403 → invalid credentials, network failure).
+- [ ] Remaining auth robustness: host redirect/308 handling, rate limiting.
 
 ### V2.2 — Pull decks (download, read-first)
 - [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards

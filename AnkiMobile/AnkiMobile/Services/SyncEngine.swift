@@ -15,12 +15,14 @@ enum SyncError: LocalizedError {
     case invalidCredentials
     case emptyField
     case network(String)
+    case notImplemented
 
     var errorDescription: String? {
         switch self {
         case .invalidCredentials: return "Incorrect username or password."
         case .emptyField: return "Please enter your email and password."
         case .network(let message): return message
+        case .notImplemented: return "Not implemented yet."
         }
     }
 }

@@ -16,7 +16,8 @@ struct RootView: View {
 
     @State private var selection: Tab = .decks
     /// Shared login state across both tabs (Decks pill reflects it; Sync tab owns login).
-    @State private var auth = AuthController(engine: MockSyncEngine())
+    /// Login uses the real AnkiWeb engine; pull/progress still use the mock until built.
+    @State private var auth = AuthController(engine: AnkiWebSyncEngine())
 
     var body: some View {
         TabView(selection: $selection) {
