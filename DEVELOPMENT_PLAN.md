@@ -166,7 +166,8 @@ always works offline; sync is an explicit action.
 - [x] Introduce a `SyncEngine` protocol; keep the mock (`MockSyncEngine`) as one implementation
       so the UI stays testable offline.
 - [x] **Keychain** storage for credentials/sync key (never in UserDefaults).
-- [ ] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape (study `rslib` schema).
+- [x] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape — see `docs/SYNC_MAPPING.md`
+      (identifies the notes/notetypes gap and the fields we must add before V2.2).
 
 ### V2.1 — Authentication
 - [ ] Real login screen (AnkiWeb email + password) → obtain sync key + assigned sync host.
