@@ -40,6 +40,9 @@ struct SyncView: View {
 
     private let account = "dai.nguyen@xtracta.com"
 
+    /// The sync backend. Swapped for a real AnkiWeb engine in V2 without touching this view.
+    private let engine: any SyncEngine = MockSyncEngine()
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -282,31 +285,43 @@ struct SyncView: View {
         isSyncing = true
         syncProgress = 0
         Task {
-            let summary = await MockCloudService.syncProgress(context: modelContext) { stage in
-                withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
+            defer { isSyncing = false }
+            do {
+                let summary = try await engine.syncProgress(in: modelContext) { stage in
+                    withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
+                }
+                lastSync = "Just now"
+                activity.insert(
+                    ActivityEntry(kind: .progress, title: "Progress Synced",
+                                  detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks · \(String(format: "%.1f", summary.duration))s",
+                                  time: "now"),
+                    at: 0
+                )
+            } catch {
+                syncStageText = "Sync failed: \(error.localizedDescription)"
             }
-            isSyncing = false
-            lastSync = "Just now"
-            activity.insert(
-                ActivityEntry(kind: .progress, title: "Progress Synced",
-                              detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks · \(String(format: "%.1f", summary.duration))s",
-                              time: "now"),
-                at: 0
-            )
         }
     }
 
     private func pullDecks() {
         isPulling = true
         Task {
-            let deck = await MockCloudService.pullDecks(context: modelContext)
-            isPulling = false
-            activity.insert(
-                ActivityEntry(kind: .deck, title: "Deck Updated",
-                              detail: "\(deck.name) · 8 new cards pulled from AnkiWeb · 5.4 MB",
-                              time: "now"),
-                at: 0
-            )
+            defer { isPulling = false }
+            do {
+                let result = try await engine.pullDecks(into: modelContext)
+                activity.insert(
+                    ActivityEntry(kind: .deck, title: "Deck Updated",
+                                  detail: "\(result.deckName) · \(result.newCards) new cards pulled from AnkiWeb · \(String(format: "%.1f", result.sizeMB)) MB",
+                                  time: "now"),
+                    at: 0
+                )
+            } catch {
+                activity.insert(
+                    ActivityEntry(kind: .deck, title: "Pull failed",
+                                  detail: error.localizedDescription, time: "now"),
+                    at: 0
+                )
+            }
         }
     }
 }
