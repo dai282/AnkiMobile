@@ -12,7 +12,7 @@ struct AnkiMobileApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Deck.self, Card.self)
+            container = try ModelContainer(for: Deck.self, Card.self, ReviewLog.self)
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

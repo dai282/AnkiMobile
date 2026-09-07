@@ -238,7 +238,23 @@ struct StudyView: View {
     private func rate(_ rating: Rating) {
         guard let card = current else { return }
         Haptics.forRating(rating)
+
+        // Capture the pre-review state so the log records the transition.
+        let stateBefore = card.state
+        let intervalBefore = card.interval
+
         scheduler.apply(rating, to: card, now: .now)
+
+        let log = ReviewLog(
+            card: card,
+            rating: rating,
+            lastInterval: intervalBefore,
+            interval: card.interval,
+            ease: card.ease,
+            stateBefore: stateBefore,
+            stateAfter: card.state
+        )
+        modelContext.insert(log)
         try? modelContext.save()
 
         // Cards still in learning reappear later in the same session.

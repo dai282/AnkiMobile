@@ -161,7 +161,7 @@ always works offline; sync is an explicit action.
       corrupt a collection also used by desktop (start read-only pull; guard the first push).
 
 ### V2.0 — Foundations (no network yet)
-- [ ] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
+- [x] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
       on every rating — required to push progress. Currently we mutate the card in place only.
 - [ ] Introduce a `SyncEngine` protocol; keep `MockCloudService` as one implementation so the
       UI stays testable offline.
