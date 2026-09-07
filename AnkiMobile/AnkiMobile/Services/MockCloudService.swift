@@ -21,6 +21,15 @@ struct MockSyncEngine: SyncEngine {
         SyncStage(text: "Finalizing database consistency…", progress: 1.0),
     ]
 
+    func logIn(username: String, password: String, host: String) async throws -> SyncCredentials {
+        guard !username.trimmingCharacters(in: .whitespaces).isEmpty, !password.isEmpty else {
+            throw SyncError.emptyField
+        }
+        try? await Task.sleep(for: .milliseconds(700))
+        // The mock accepts any non-empty credentials and returns a fake host key.
+        return SyncCredentials(username: username, hostKey: "mock-host-key", host: host)
+    }
+
     func syncProgress(
         in context: ModelContext,
         onStage: @escaping (SyncStage) -> Void

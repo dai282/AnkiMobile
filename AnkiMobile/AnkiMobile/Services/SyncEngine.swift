@@ -10,6 +10,21 @@
 import Foundation
 import SwiftData
 
+/// Errors surfaced by a sync engine.
+enum SyncError: LocalizedError {
+    case invalidCredentials
+    case emptyField
+    case network(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidCredentials: return "Incorrect username or password."
+        case .emptyField: return "Please enter your email and password."
+        case .network(let message): return message
+        }
+    }
+}
+
 /// A single stage of a progress-sync run, for driving the progress UI.
 struct SyncStage {
     let text: String
@@ -30,8 +45,18 @@ struct PullResult {
     let sizeMB: Double
 }
 
+/// Credentials obtained after a successful login (Anki's `hostKey` + chosen endpoint).
+struct SyncCredentials: Equatable {
+    let username: String
+    let hostKey: String
+    let host: String
+}
+
 @MainActor
 protocol SyncEngine {
+    /// Log in with AnkiWeb (or a self-hosted server) credentials, returning a host key.
+    func logIn(username: String, password: String, host: String) async throws -> SyncCredentials
+
     /// Pull decks/cards from the remote into the local store.
     func pullDecks(into context: ModelContext) async throws -> PullResult
 

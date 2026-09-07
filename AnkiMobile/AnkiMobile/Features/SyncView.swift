@@ -38,20 +38,30 @@ struct SyncView: View {
                       time: "08:15:04"),
     ]
 
-    private let account = "dai.nguyen@xtracta.com"
-
     /// The sync backend. Swapped for a real AnkiWeb engine in V2 without touching this view.
     private let engine: any SyncEngine = MockSyncEngine()
+    @Environment(AuthController.self) private var auth
+
+    // Login form
+    @State private var loginUser = ""
+    @State private var loginPassword = ""
+    @State private var loginHost = AuthController.defaultHost
+    @State private var isLoggingIn = false
+    @State private var loginError: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Metrics.spaceMd) {
-                    profileCard
-                    cloudActions
-                    storageCard
-                    activityCard
-                    logoutButton
+                    if auth.isLoggedIn {
+                        profileCard
+                        cloudActions
+                        storageCard
+                        activityCard
+                        logoutButton
+                    } else {
+                        loginCard
+                    }
                 }
                 .padding(.horizontal, Metrics.screenMargin)
                 .padding(.vertical, Metrics.spaceMd)
@@ -59,6 +69,71 @@ struct SyncView: View {
             .background(Palette.canvas.ignoresSafeArea())
             .navigationTitle("Sync & Account")
         }
+    }
+
+    // MARK: Login
+
+    private var loginCard: some View {
+        VStack(alignment: .leading, spacing: Metrics.spaceMd) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Connect to AnkiWeb")
+                    .font(AppFont.headlineSm)
+                    .foregroundStyle(Palette.textPrimary)
+                Text("Log in to pull decks and sync your review progress.")
+                    .font(AppFont.bodySm)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+
+            field(icon: "envelope", placeholder: "Email", text: $loginUser, secure: false)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.emailAddress)
+            field(icon: "lock", placeholder: "Password", text: $loginPassword, secure: true)
+            field(icon: "server.rack", placeholder: "Server", text: $loginHost, secure: false)
+                .textInputAutocapitalization(.never)
+
+            if let loginError {
+                Text(loginError)
+                    .font(AppFont.labelSm)
+                    .foregroundStyle(Palette.critical)
+            }
+
+            Button(action: performLogin) {
+                HStack(spacing: 8) {
+                    if isLoggingIn {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .rotationEffect(.degrees(360))
+                            .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isLoggingIn)
+                    }
+                    Text(isLoggingIn ? "Logging in…" : "Log In")
+                }
+                .font(AppFont.headlineSm)
+                .foregroundStyle(Palette.canvas)
+                .frame(maxWidth: .infinity)
+                .frame(height: Metrics.touchComfortable)
+                .background(Palette.primary, in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous))
+            }
+            .disabled(isLoggingIn)
+        }
+        .surfaceCard(cornerRadius: Metrics.radiusCard)
+    }
+
+    private func field(icon: String, placeholder: String, text: Binding<String>, secure: Bool) -> some View {
+        HStack(spacing: Metrics.spaceSm) {
+            Image(systemName: icon).foregroundStyle(Palette.textMuted).frame(width: 18)
+            if secure {
+                SecureField(placeholder, text: text).font(AppFont.bodyMd)
+            } else {
+                TextField(placeholder, text: text).font(AppFont.bodyMd).autocorrectionDisabled()
+            }
+        }
+        .foregroundStyle(Palette.textPrimary)
+        .padding(.horizontal, Metrics.spaceSm)
+        .frame(height: Metrics.touchMin)
+        .background(Palette.surfaceLow, in: RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.radiusPill, style: .continuous)
+                .strokeBorder(Palette.hairline, lineWidth: 1)
+        )
     }
 
     // MARK: Profile
@@ -72,7 +147,7 @@ struct SyncView: View {
                     .frame(width: 44, height: 44)
                     .background(Palette.primary.opacity(0.18), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account)
+                    Text(auth.credentials?.username ?? "Account")
                         .font(AppFont.headlineSm)
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
@@ -261,7 +336,7 @@ struct SyncView: View {
     }
 
     private var logoutButton: some View {
-        Button {} label: {
+        Button { auth.logOut() } label: {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Log Out")
@@ -280,6 +355,20 @@ struct SyncView: View {
     }
 
     // MARK: Actions
+
+    private func performLogin() {
+        isLoggingIn = true
+        loginError = nil
+        Task {
+            defer { isLoggingIn = false }
+            do {
+                try await auth.logIn(username: loginUser, password: loginPassword, host: loginHost)
+                loginPassword = ""
+            } catch {
+                loginError = error.localizedDescription
+            }
+        }
+    }
 
     private func syncNow() {
         isSyncing = true
@@ -329,5 +418,6 @@ struct SyncView: View {
 #Preview {
     SyncView()
         .modelContainer(sampleContainer())
+        .environment(AuthController(engine: MockSyncEngine()))
         .preferredColorScheme(.dark)
 }

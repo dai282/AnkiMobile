@@ -15,6 +15,8 @@ struct RootView: View {
     }
 
     @State private var selection: Tab = .decks
+    /// Shared login state across both tabs (Decks pill reflects it; Sync tab owns login).
+    @State private var auth = AuthController(engine: MockSyncEngine())
 
     var body: some View {
         TabView(selection: $selection) {
@@ -30,11 +32,13 @@ struct RootView: View {
                 }
         }
         .tint(Palette.primary)
+        .environment(auth)
     }
 }
 
 #Preview {
     RootView()
         .modelContainer(sampleContainer())
+        .environment(AuthController(engine: MockSyncEngine()))
         .preferredColorScheme(.dark)
 }

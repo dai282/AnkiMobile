@@ -170,9 +170,11 @@ always works offline; sync is an explicit action.
       (identifies the notes/notetypes gap and the fields we must add before V2.2).
 
 ### V2.1 — Authentication
-- [ ] Real login screen (AnkiWeb email + password) → obtain sync key + assigned sync host.
-- [ ] Wire the Sync tab's account card + real **Log Out** (clear key; optional local wipe).
-- [ ] Handle auth errors (bad credentials, rate limiting, host redirect).
+- [x] Login screen (email + password + server field) and connected-account state in the Sync tab.
+- [x] `AuthController` + Keychain-backed credentials; real **Log Out** (clears Keychain).
+- [x] End-to-end login flow via `MockSyncEngine` (offline-testable; accepts any creds).
+- [ ] Real `hostKey` network call against the self-hosted server (V2.1b) — replaces mock login.
+- [ ] Handle auth errors from the server (bad credentials, rate limiting, host redirect/308).
 
 ### V2.2 — Pull decks (download, read-first)
 - [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards
