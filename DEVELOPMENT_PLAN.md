@@ -163,9 +163,9 @@ always works offline; sync is an explicit action.
 ### V2.0 — Foundations (no network yet)
 - [x] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
       on every rating — required to push progress. Currently we mutate the card in place only.
-- [ ] Introduce a `SyncEngine` protocol; keep `MockCloudService` as one implementation so the
-      UI stays testable offline.
-- [ ] **Keychain** storage for credentials/sync key (never in UserDefaults).
+- [x] Introduce a `SyncEngine` protocol; keep the mock (`MockSyncEngine`) as one implementation
+      so the UI stays testable offline.
+- [x] **Keychain** storage for credentials/sync key (never in UserDefaults).
 - [ ] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape (study `rslib` schema).
 
 ### V2.1 — Authentication
