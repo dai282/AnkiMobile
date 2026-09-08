@@ -176,8 +176,8 @@ always works offline; sync is an explicit action.
 - [x] Real `hostKey` network call — verified against Anki's own sync server (HTTP 200).
       Uses sync v11 wire format: `anki-sync` header + zstd(JSON) body/response. Requires the
       `facebook/zstd` SwiftPM package (`Zstd` wrapper) and an ATS local-networking exception.
-- [x] Basic auth errors (empty fields, 403 → invalid credentials, network failure).
-- [ ] Remaining auth robustness: host redirect/308 handling, rate limiting.
+- [x] Auth errors: empty fields, 403 → invalid credentials, 429 → rate limited, network failure.
+- [x] Manual 308 host-redirect handling (follows AnkiWeb's shard move; remembers resolved host).
 
 ### V2.2 — Pull decks (download, read-first)
 - [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards

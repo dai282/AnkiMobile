@@ -14,6 +14,7 @@ import SwiftData
 enum SyncError: LocalizedError {
     case invalidCredentials
     case emptyField
+    case rateLimited
     case network(String)
     case notImplemented
 
@@ -21,6 +22,7 @@ enum SyncError: LocalizedError {
         switch self {
         case .invalidCredentials: return "Incorrect username or password."
         case .emptyField: return "Please enter your email and password."
+        case .rateLimited: return "Too many attempts. Please wait a moment and try again."
         case .network(let message): return message
         case .notImplemented: return "Not implemented yet."
         }
