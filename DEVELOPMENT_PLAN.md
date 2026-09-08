@@ -161,17 +161,23 @@ always works offline; sync is an explicit action.
       corrupt a collection also used by desktop (start read-only pull; guard the first push).
 
 ### V2.0 — Foundations (no network yet)
-- [ ] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
+- [x] Add a **review log** model (`ReviewLog`: card, rating, interval, ease, timestamp) written
       on every rating — required to push progress. Currently we mutate the card in place only.
-- [ ] Introduce a `SyncEngine` protocol; keep `MockCloudService` as one implementation so the
-      UI stays testable offline.
-- [ ] **Keychain** storage for credentials/sync key (never in UserDefaults).
-- [ ] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape (study `rslib` schema).
+- [x] Introduce a `SyncEngine` protocol; keep the mock (`MockSyncEngine`) as one implementation
+      so the UI stays testable offline.
+- [x] **Keychain** storage for credentials/sync key (never in UserDefaults).
+- [x] Map our SwiftData models ↔ Anki's note/card/deck/revlog shape — see `docs/SYNC_MAPPING.md`
+      (identifies the notes/notetypes gap and the fields we must add before V2.2).
 
 ### V2.1 — Authentication
-- [ ] Real login screen (AnkiWeb email + password) → obtain sync key + assigned sync host.
-- [ ] Wire the Sync tab's account card + real **Log Out** (clear key; optional local wipe).
-- [ ] Handle auth errors (bad credentials, rate limiting, host redirect).
+- [x] Login screen (email + password + server field) and connected-account state in the Sync tab.
+- [x] `AuthController` + Keychain-backed credentials; real **Log Out** (clears Keychain).
+- [x] End-to-end login flow via `MockSyncEngine` (offline-testable; accepts any creds).
+- [x] Real `hostKey` network call — verified against Anki's own sync server (HTTP 200).
+      Uses sync v11 wire format: `anki-sync` header + zstd(JSON) body/response. Requires the
+      `facebook/zstd` SwiftPM package (`Zstd` wrapper) and an ATS local-networking exception.
+- [x] Auth errors: empty fields, 403 → invalid credentials, 429 → rate limited, network failure.
+- [x] Manual 308 host-redirect handling (follows AnkiWeb's shard move; remembers resolved host).
 
 ### V2.2 — Pull decks (download, read-first)
 - [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards

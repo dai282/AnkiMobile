@@ -6,13 +6,30 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		233A7057304EC9A900FA0EA2 /* libzstd in Frameworks */ = {isa = PBXBuildFile; productRef = 233A7056304EC9A900FA0EA2 /* libzstd */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		2376F342304D123600164F64 /* AnkiMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnkiMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		233A705D304ECB4100FA0EA2 /* Exceptions for "AnkiMobile" folder in "AnkiMobile" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2376F341304D123600164F64 /* AnkiMobile */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2376F344304D123600164F64 /* AnkiMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				233A705D304ECB4100FA0EA2 /* Exceptions for "AnkiMobile" folder in "AnkiMobile" target */,
+			);
 			path = AnkiMobile;
 			sourceTree = "<group>";
 		};
@@ -23,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				233A7057304EC9A900FA0EA2 /* libzstd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +83,7 @@
 			);
 			name = AnkiMobile;
 			packageProductDependencies = (
+				233A7056304EC9A900FA0EA2 /* libzstd */,
 			);
 			productName = AnkiMobile;
 			productReference = 2376F342304D123600164F64 /* AnkiMobile.app */;
@@ -94,6 +113,9 @@
 			);
 			mainGroup = 2376F339304D123600164F64;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				233A7055304EC9A900FA0EA2 /* XCRemoteSwiftPackageReference "zstd" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2376F343304D123600164F64 /* Products */;
 			projectDirPath = "";
@@ -253,6 +275,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnkiMobile/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -284,6 +307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AnkiMobile/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -328,6 +352,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		233A7055304EC9A900FA0EA2 /* XCRemoteSwiftPackageReference "zstd" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/zstd";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		233A7056304EC9A900FA0EA2 /* libzstd */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 233A7055304EC9A900FA0EA2 /* XCRemoteSwiftPackageReference "zstd" */;
+			productName = libzstd;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2376F33A304D123600164F64 /* Project object */;
 }

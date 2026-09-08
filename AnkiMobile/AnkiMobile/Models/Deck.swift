@@ -26,6 +26,14 @@ final class Deck {
     var sortOrder: Int
     var createdAt: Date
 
+    // MARK: Sync scaffolding (see docs/SYNC_MAPPING.md)
+    /// Anki-native integer deck id, assigned lazily on first pull/sync.
+    var ankiDeckId: Int? = nil
+    /// Update sequence number: -1 means "changed locally, not yet synced".
+    var usn: Int = -1
+    /// Last-modified time (epoch seconds).
+    var mod: Int = 0
+
     // MARK: Hierarchy
     var parent: Deck?
     @Relationship(deleteRule: .cascade, inverse: \Deck.parent)
@@ -54,9 +62,16 @@ final class Deck {
         self.sizeMB = sizeMB
         self.sortOrder = sortOrder
         self.createdAt = .now
+        self.mod = Int(Date.now.timeIntervalSince1970)
         self.parent = parent
         self.subdecks = []
         self.cards = []
+    }
+
+    /// Marks the deck as changed locally so the next sync will push it.
+    func markDirty(at now: Date = .now) {
+        usn = -1
+        mod = Int(now.timeIntervalSince1970)
     }
 }
 

@@ -12,6 +12,7 @@ struct DecksView: View {
     /// Called when the user taps the sync/account controls — switches to the Sync tab.
     var onOpenSync: () -> Void = {}
 
+    @Environment(AuthController.self) private var auth
     @Query(sort: \Deck.sortOrder) private var allDecks: [Deck]
     @State private var searchText = ""
     @State private var expandedDeckIDs: Set<UUID> = []
@@ -72,12 +73,13 @@ struct DecksView: View {
     // MARK: Toolbar
 
     private var syncStatusPill: some View {
-        Button(action: onOpenSync) {
+        let loggedIn = auth.isLoggedIn
+        return Button(action: onOpenSync) {
             HStack(spacing: 5) {
-                Image(systemName: "checkmark.icloud.fill")
+                Image(systemName: loggedIn ? "checkmark.icloud.fill" : "icloud.slash")
                     .font(.system(size: 13))
-                    .foregroundStyle(Palette.success)
-                Text("Synced")
+                    .foregroundStyle(loggedIn ? Palette.success : Palette.textMuted)
+                Text(loggedIn ? "Synced" : "Sign in to sync")
                     .font(AppFont.labelSm)
                     .foregroundStyle(Palette.textSecondary)
             }
@@ -87,7 +89,7 @@ struct DecksView: View {
             .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Sync status: synced. Open Sync tab")
+        .accessibilityLabel(loggedIn ? "Sync status: synced. Open Sync tab" : "Not signed in. Open Sync tab to sign in")
     }
 
     private var avatar: some View {
@@ -193,11 +195,14 @@ struct DecksView: View {
     // MARK: Footer banner
 
     private var syncBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "checkmark.circle.fill")
+        let loggedIn = auth.isLoggedIn
+        return HStack(spacing: 6) {
+            Image(systemName: loggedIn ? "checkmark.circle.fill" : "icloud.slash")
                 .font(.system(size: 13))
-                .foregroundStyle(Palette.success)
-            Text("Last synced with AnkiWeb 4 mins ago • All media local")
+                .foregroundStyle(loggedIn ? Palette.success : Palette.textMuted)
+            Text(loggedIn
+                 ? "Last synced with AnkiWeb 4 mins ago • All media local"
+                 : "Studying offline • Sign in on the Sync tab to enable sync")
                 .font(AppFont.labelSm)
                 .foregroundStyle(Palette.textMuted)
         }
@@ -392,5 +397,6 @@ private struct SubdeckRow: View {
 #Preview {
     DecksView()
         .modelContainer(sampleContainer())
+        .environment(AuthController(engine: MockSyncEngine()))
         .preferredColorScheme(.dark)
 }

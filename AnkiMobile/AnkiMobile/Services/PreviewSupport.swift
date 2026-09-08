@@ -12,7 +12,7 @@ import SwiftData
 func sampleContainer() -> ModelContainer {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     // swiftlint:disable:next force_try
-    let container = try! ModelContainer(for: Deck.self, Card.self, configurations: config)
+    let container = try! ModelContainer(for: Deck.self, Card.self, ReviewLog.self, SyncState.self, configurations: config)
     SampleData.seed(container.mainContext)
     return container
 }

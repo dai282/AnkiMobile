@@ -225,7 +225,11 @@ struct DeckDetailView: View {
         Task {
             try? await Task.sleep(for: .milliseconds(900))
             deck.isDownloaded = true
-            for sub in deck.subdecks { sub.isDownloaded = true }
+            deck.markDirty()
+            for sub in deck.subdecks {
+                sub.isDownloaded = true
+                sub.markDirty()
+            }
             try? modelContext.save()
             isDownloading = false
         }
