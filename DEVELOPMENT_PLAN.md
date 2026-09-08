@@ -179,11 +179,14 @@ always works offline; sync is an explicit action.
 - [x] Auth errors: empty fields, 403 → invalid credentials, 429 → rate limited, network failure.
 - [x] Manual 308 host-redirect handling (follows AnkiWeb's shard move; remembers resolved host).
 
-### V2.2 — Pull decks (download, read-first)
-- [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards
-      locally (chunked/incremental where possible).
-- [ ] Replace the "Download to Study" + "Pull N cards" mocks with real progress/results.
-- [ ] Robust partial-failure handling and resumability.
+### V2.2 — Pull decks
+- [x] `meta` handshake (server usn/schema/empty) — verified against the real server.
+- [ ] Full `download`: fetch the collection as a zstd `.anki2` SQLite file. (First sync from our
+      empty/non-Anki local store is a *full download* — our schema can't match the server's, so
+      the normal chunked path isn't offered.) Verify the exact download response framing first.
+- [ ] Parse the downloaded SQLite with the built-in SQLite3 C API (no new dependency): decks from
+      `col.decks` JSON; notes+cards → our `Card`; scheduling fields per `docs/SYNC_MAPPING.md`.
+- [ ] Surface real pull results (deck/card counts) in the activity log.
 
 ### V2.3 — Sync progress (two-way)
 - [ ] Push local review log + scheduling state; reconcile with remote (usn/anchor logic).

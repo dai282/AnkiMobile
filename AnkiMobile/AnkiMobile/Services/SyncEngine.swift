@@ -62,11 +62,12 @@ protocol SyncEngine {
     func logIn(username: String, password: String, host: String) async throws -> SyncCredentials
 
     /// Pull decks/cards from the remote into the local store.
-    func pullDecks(into context: ModelContext) async throws -> PullResult
+    func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult
 
     /// Push local review progress upstream and reconcile, reporting each stage.
     func syncProgress(
         in context: ModelContext,
+        credentials: SyncCredentials,
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary
 }

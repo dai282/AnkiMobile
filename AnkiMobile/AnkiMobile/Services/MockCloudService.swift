@@ -32,6 +32,7 @@ struct MockSyncEngine: SyncEngine {
 
     func syncProgress(
         in context: ModelContext,
+        credentials: SyncCredentials,
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary {
         for stage in stages {
@@ -46,7 +47,7 @@ struct MockSyncEngine: SyncEngine {
     }
 
     @discardableResult
-    func pullDecks(into context: ModelContext) async throws -> PullResult {
+    func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
         try? await Task.sleep(for: .milliseconds(900))
 
         let deckCount = (try? context.fetchCount(FetchDescriptor<Deck>())) ?? 0
