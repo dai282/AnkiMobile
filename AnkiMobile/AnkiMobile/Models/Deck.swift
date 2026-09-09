@@ -91,6 +91,22 @@ enum StudyMode {
     case reviewsOnly
 }
 
+extension Array where Element == Card {
+    /// Buckets cards into New / Learning / Review. Learning is counted regardless of due
+    /// time (a card rated Again/Hard is still "in learning"); review counts only due cards.
+    func queueCounts(asOf now: Date = .now) -> QueueCounts {
+        var result = QueueCounts()
+        for card in self {
+            switch card.state {
+            case .new: result.new += 1
+            case .learning: result.learning += 1
+            case .review: if card.due <= now { result.review += 1 }
+            }
+        }
+        return result
+    }
+}
+
 extension Deck {
     /// True if this deck is a top-level deck (no parent).
     var isTopLevel: Bool { parent == nil }
@@ -118,20 +134,16 @@ extension Deck {
     /// True when the deck is downloaded and has at least one card.
     var isStudyable: Bool { isEffectivelyDownloaded && !allCards.isEmpty }
 
+    /// The id of this deck and all descendants (for membership checks).
+    var subtreeIDs: Set<UUID> {
+        var ids: Set<UUID> = [id]
+        for sub in subdecks { ids.formUnion(sub.subtreeIDs) }
+        return ids
+    }
+
     /// Counts of due/new cards across this deck and its subdecks.
     func counts(asOf now: Date = .now) -> QueueCounts {
-        var result = QueueCounts()
-        for card in allCards {
-            switch card.state {
-            case .new:
-                result.new += 1
-            case .learning:
-                if card.due <= now { result.learning += 1 }
-            case .review:
-                if card.due <= now { result.review += 1 }
-            }
-        }
-        return result
+        allCards.queueCounts(asOf: now)
     }
 
     /// Builds the ordered list of cards to study for a given mode.

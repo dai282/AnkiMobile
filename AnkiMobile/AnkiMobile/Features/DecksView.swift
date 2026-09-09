@@ -14,6 +14,8 @@ struct DecksView: View {
 
     @Environment(AuthController.self) private var auth
     @Query(sort: \Deck.sortOrder) private var allDecks: [Deck]
+    /// Also observe cards so counts refresh immediately when ratings change them.
+    @Query private var allCards: [Card]
     @State private var searchText = ""
     @State private var expandedDeckIDs: Set<UUID> = []
 
@@ -23,16 +25,10 @@ struct DecksView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    /// Daily queue only reflects decks you can actually study (i.e. downloaded ones).
+    /// Daily queue only reflects cards you can actually study (from downloaded decks).
+    /// Computed from the cards query so it stays reactive to rating changes.
     private var aggregate: QueueCounts {
-        topLevelDecks
-            .filter { $0.isDownloaded }
-            .reduce(into: QueueCounts()) { total, deck in
-                let counts = deck.counts()
-                total.new += counts.new
-                total.learning += counts.learning
-                total.review += counts.review
-            }
+        allCards.filter { $0.deck?.isEffectivelyDownloaded == true }.queueCounts()
     }
 
     private var filteredDecks: [Deck] {
