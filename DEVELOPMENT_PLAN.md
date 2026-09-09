@@ -179,16 +179,28 @@ always works offline; sync is an explicit action.
 - [x] Auth errors: empty fields, 403 → invalid credentials, 429 → rate limited, network failure.
 - [x] Manual 308 host-redirect handling (follows AnkiWeb's shard move; remembers resolved host).
 
-### V2.2 — Pull decks (download, read-first)
-- [ ] Implement the real **pull**: fetch collection changes and materialize decks + cards
-      locally (chunked/incremental where possible).
-- [ ] Replace the "Download to Study" + "Pull N cards" mocks with real progress/results.
-- [ ] Robust partial-failure handling and resumability.
+### V2.2 — Pull decks
+- [x] `meta` handshake (server usn/schema/empty) — verified against the real server.
+- [x] Full `download`: fetch the collection as a zstd `.anki2` SQLite file (POST `/sync/download`,
+      body `{}`). Verified against the real server.
+- [x] Parse the downloaded SQLite with the built-in SQLite3 C API (opened read-write to satisfy
+      WAL). Modern schema 18: separate `decks`/`notetypes`/`notes`/`cards` tables.
+- [x] Materialize into SwiftData: deck hierarchy from `\x1f`-separated names (skip empty Default);
+      notes+cards → `Card` (first field = front, rest = back; strip HTML/`[sound:]`); scheduling.
+      Idempotent re-pull (replaces prior pulled decks/cards; keeps local seeded decks).
+- [x] Surface real pull results in the activity log. **Verified with a real 101-card deck.**
 
 ### V2.3 — Sync progress (two-way)
-- [ ] Push local review log + scheduling state; reconcile with remote (usn/anchor logic).
+> **Architecture note:** real push is harder than pull. Our full `download` is *not* a normal-sync
+> anchor, and we discard the `.anki2`. To push incrementally, we must keep a **persisted native
+> `.anki2` collection as the sync source of truth**, mirror our study reviews into it (update
+> `cards` + insert `revlog`, mark `usn=-1`, bump `col.mod`), then run the normal incremental
+> protocol (`start`→`applyChanges`→`chunk`/`applyChunk`→`sanityCheck`→`finish`). Note `CardEntry`/
+> `RevlogEntry` are serialized as JSON **arrays** (serde tuples). Direction decision pending.
+- [ ] Persist the downloaded `.anki2`; mirror reviews into it.
+- [ ] Implement incremental push (`applyChunk`) + receive (`chunk`) with usn logic.
 - [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal.
-- [ ] Real activity log entries (Progress Synced / Deck Updated) from actual results.
+- [ ] Real activity log entries from actual results.
 
 ### V2.4 — Hardening
 - [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
@@ -196,8 +208,12 @@ always works offline; sync is an explicit action.
       remove them if we decide media is out of scope.
 - [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
 
+### V2.5 — Media (audio/images)
+- [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.
+- [ ] Store media in the app sandbox; play answer audio via AVAudioPlayer (wire the speaker button).
+
 ### Deferred / stretch (not blocking V2)
-- [ ] Media assets (audio/images) with hash-based dedup.
+- [ ] Media hash-based dedup.
 - [ ] **FSRS** scheduler option (reference `rslib/src/scheduler/fsrs`).
 - [ ] Full **Dynamic Type** support (scalable font metrics via `@ScaledMetric`).
 - [ ] iPad layout (only if desired later).

@@ -38,14 +38,71 @@ struct AnkiWebSyncEngine: SyncEngine {
         return SyncCredentials(username: user, hostKey: key, host: resolvedHost)
     }
 
-    // MARK: Not yet implemented (later V2 increments)
+    // MARK: Meta handshake
 
-    func pullDecks(into context: ModelContext) async throws -> PullResult {
-        throw SyncError.notImplemented
+    /// Server-reported collection metadata (see Anki's `SyncMeta`).
+    struct ServerMeta {
+        let modified: Int      // "mod" (ms)
+        let schema: Int        // "scm" (ms)
+        let usn: Int           // "usn"
+        let serverMessage: String  // "msg"
+        let shouldContinue: Bool   // "cont"
+        let empty: Bool            // "empty"
+    }
+
+    /// Performs the `meta` handshake, which reveals the server's usn/schema and whether
+    /// the remote collection is empty — the basis for deciding what (if anything) to pull.
+    func fetchMeta(_ credentials: SyncCredentials) async throws -> ServerMeta {
+        let body = try JSONSerialization.data(withJSONObject: ["v": syncVersion, "cv": clientVersion])
+        let (data, _) = try await send(method: "meta", host: credentials.host, hostKey: credentials.hostKey, body: body)
+        let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        return ServerMeta(
+            modified: (object["mod"] as? NSNumber)?.intValue ?? 0,
+            schema: (object["scm"] as? NSNumber)?.intValue ?? 0,
+            usn: (object["usn"] as? NSNumber)?.intValue ?? 0,
+            serverMessage: object["msg"] as? String ?? "",
+            shouldContinue: object["cont"] as? Bool ?? true,
+            empty: object["empty"] as? Bool ?? false
+        )
+    }
+
+    // MARK: Pull / progress (built incrementally across V2.2 / V2.3)
+
+    /// Full-sync download: fetches the entire collection as a `.anki2` SQLite file.
+    func downloadCollection(_ credentials: SyncCredentials) async throws -> Data {
+        let (data, _) = try await send(method: "download", host: credentials.host,
+                                       hostKey: credentials.hostKey, body: Data("{}".utf8))
+        return data
+    }
+
+    func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
+        let meta = try await fetchMeta(credentials)
+        if !meta.shouldContinue {
+            throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
+        }
+        if meta.empty {
+            return PullResult(deckName: "Server has no decks to pull yet", newCards: 0, sizeMB: 0)
+        }
+
+        // First sync from our (non-Anki) local store = full download.
+        let dbBytes = try await downloadCollection(credentials)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pull-\(UUID().uuidString).anki2")
+        try dbBytes.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        // Materialize the downloaded collection into our SwiftData store.
+        let reader = try AnkiCollectionReader(path: tmp.path)
+        let summary = try CollectionImporter(reader: reader, context: context).importAll()
+        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) from \(dbBytes.count) bytes")
+
+        let mb = Double(dbBytes.count) / (1024 * 1024)
+        return PullResult(deckName: summary.topDeckName, newCards: summary.cards, sizeMB: mb)
     }
 
     func syncProgress(
         in context: ModelContext,
+        credentials: SyncCredentials,
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary {
         throw SyncError.notImplemented

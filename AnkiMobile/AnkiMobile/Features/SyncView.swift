@@ -38,8 +38,10 @@ struct SyncView: View {
                       time: "08:15:04"),
     ]
 
-    /// The sync backend. Swapped for a real AnkiWeb engine in V2 without touching this view.
-    private let engine: any SyncEngine = MockSyncEngine()
+    /// Pull uses the real AnkiWeb engine (V2.2 in progress); progress still uses the mock
+    /// until V2.3 implements the real push.
+    private let pullEngine: any SyncEngine = AnkiWebSyncEngine()
+    private let progressEngine: any SyncEngine = MockSyncEngine()
     @Environment(AuthController.self) private var auth
 
     // Login form
@@ -371,12 +373,13 @@ struct SyncView: View {
     }
 
     private func syncNow() {
+        guard let creds = auth.credentials else { return }
         isSyncing = true
         syncProgress = 0
         Task {
             defer { isSyncing = false }
             do {
-                let summary = try await engine.syncProgress(in: modelContext) { stage in
+                let summary = try await progressEngine.syncProgress(in: modelContext, credentials: creds) { stage in
                     withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
                 }
                 lastSync = "Just now"
@@ -393,11 +396,12 @@ struct SyncView: View {
     }
 
     private func pullDecks() {
+        guard let creds = auth.credentials else { return }
         isPulling = true
         Task {
             defer { isPulling = false }
             do {
-                let result = try await engine.pullDecks(into: modelContext)
+                let result = try await pullEngine.pullDecks(into: modelContext, credentials: creds)
                 activity.insert(
                     ActivityEntry(kind: .deck, title: "Deck Updated",
                                   detail: "\(result.deckName) · \(result.newCards) new cards pulled from AnkiWeb · \(String(format: "%.1f", result.sizeMB)) MB",
