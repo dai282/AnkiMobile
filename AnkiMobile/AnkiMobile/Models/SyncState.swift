@@ -21,6 +21,8 @@ final class SyncState {
     var lastSyncedUsn: Int
     /// Collection modification time at last sync (epoch millis) — Anki's `col.mod`.
     var lastSyncMod: Int
+    /// Whether a native `.anki2` collection has been pulled and persisted (the sync anchor).
+    var hasCollection: Bool = false
 
     init(now: Date = .now) {
         let secs = Int(now.timeIntervalSince1970)

@@ -86,15 +86,27 @@ struct AnkiWebSyncEngine: SyncEngine {
 
         // First sync from our (non-Anki) local store = full download.
         let dbBytes = try await downloadCollection(credentials)
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pull-\(UUID().uuidString).anki2")
-        try dbBytes.write(to: tmp)
-        defer { try? FileManager.default.removeItem(at: tmp) }
 
-        // Materialize the downloaded collection into our SwiftData store.
-        let reader = try AnkiCollectionReader(path: tmp.path)
+        // Persist the collection as the sync source of truth (not a temp file).
+        try CollectionStore.ensureDirectory()
+        CollectionStore.reset()
+        try dbBytes.write(to: CollectionStore.collectionURL)
+
+        // Materialize into our SwiftData store for the UI.
+        let reader = try AnkiCollectionReader(path: CollectionStore.collectionURL.path)
+        let crt = (try? reader.creationEpoch()) ?? 0
         let summary = try CollectionImporter(reader: reader, context: context).importAll()
-        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) from \(dbBytes.count) bytes")
+
+        // Record the sync anchor (server state we're now at) for future incremental push.
+        let sync = SyncState.ensure(in: context)
+        sync.lastSyncedUsn = meta.usn
+        sync.lastSyncMod = meta.modified
+        sync.schemaMod = meta.schema
+        sync.creationEpoch = crt
+        sync.hasCollection = true
+        try? context.save()
+
+        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards); persisted \(CollectionStore.collectionURL.lastPathComponent); anchor usn=\(meta.usn) mod=\(meta.modified) scm=\(meta.schema)")
 
         let mb = Double(dbBytes.count) / (1024 * 1024)
         return PullResult(deckName: summary.topDeckName, newCards: summary.cards, sizeMB: mb)
