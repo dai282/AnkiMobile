@@ -68,14 +68,36 @@ struct AnkiWebSyncEngine: SyncEngine {
 
     // MARK: Pull / progress (built incrementally across V2.2 / V2.3)
 
+    /// Full-sync download: fetches the entire collection as a `.anki2` SQLite file.
+    func downloadCollection(_ credentials: SyncCredentials) async throws -> Data {
+        let (data, _) = try await send(method: "download", host: credentials.host,
+                                       hostKey: credentials.hostKey, body: Data("{}".utf8))
+        return data
+    }
+
     func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
         let meta = try await fetchMeta(credentials)
         if !meta.shouldContinue {
             throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
         }
-        // V2.2 (meta step): handshake verified. Downloading decks/cards comes next.
-        let state = meta.empty ? "empty collection" : "collection at usn \(meta.usn)"
-        return PullResult(deckName: "Server reached — \(state)", newCards: 0, sizeMB: 0)
+        if meta.empty {
+            return PullResult(deckName: "Server has no decks to pull yet", newCards: 0, sizeMB: 0)
+        }
+
+        // First sync from our (non-Anki) local store = full download.
+        let dbBytes = try await downloadCollection(credentials)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pull-\(UUID().uuidString).anki2")
+        try dbBytes.write(to: tmp)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        // Materialize the downloaded collection into our SwiftData store.
+        let reader = try AnkiCollectionReader(path: tmp.path)
+        let summary = try CollectionImporter(reader: reader, context: context).importAll()
+        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) from \(dbBytes.count) bytes")
+
+        let mb = Double(dbBytes.count) / (1024 * 1024)
+        return PullResult(deckName: summary.topDeckName, newCards: summary.cards, sizeMB: mb)
     }
 
     func syncProgress(
