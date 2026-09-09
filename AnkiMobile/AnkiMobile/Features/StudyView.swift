@@ -249,7 +249,8 @@ struct StudyView: View {
         scheduler.apply(rating, to: card, now: .now)
         card.markDirty()
 
-        let elapsedMs = Int(Date.now.timeIntervalSince(cardShownAt) * 1000)
+        let reviewedAt = Date.now
+        let elapsedMs = max(0, Int(reviewedAt.timeIntervalSince(cardShownAt) * 1000))
         let log = ReviewLog(
             card: card,
             rating: rating,
@@ -258,10 +259,15 @@ struct StudyView: View {
             ease: card.ease,
             stateBefore: stateBefore,
             stateAfter: card.state,
-            timeTakenMs: max(0, elapsedMs)
+            timeTakenMs: elapsedMs,
+            reviewedAt: reviewedAt
         )
         modelContext.insert(log)
         try? modelContext.save()
+
+        // Mirror the rating into the persisted native collection so the next sync can push it.
+        mirrorReview(card: card, rating: rating, stateBefore: stateBefore,
+                     intervalBefore: intervalBefore, reviewedAt: reviewedAt, timeMs: elapsedMs)
 
         // Cards still in learning reappear later in the same session.
         if card.state == .learning {
@@ -273,6 +279,50 @@ struct StudyView: View {
             index += 1
         }
         cardShownAt = .now
+    }
+
+    /// Writes a just-applied rating into the persisted `.anki2` collection (cards row +
+    /// revlog entry), so V2.3c can push it. No-op for locally seeded cards (no Anki id)
+    /// or before any collection has been pulled. Failures are logged, never fatal —
+    /// SwiftData remains the source of truth for the UI.
+    private func mirrorReview(card: Card, rating: Rating, stateBefore: CardState,
+                              intervalBefore: Int, reviewedAt: Date, timeMs: Int) {
+        guard let cardId = card.ankiCardId, CollectionStore.exists else { return }
+
+        let crt = SyncState.ensure(in: modelContext).creationEpoch
+        let (type, queue) = AnkiSchema.typeAndQueue(for: card.state)
+        let due: Int
+        switch card.state {
+        case .review:   due = AnkiSchema.reviewDue(card.due, creationEpoch: crt)
+        case .learning: due = Int(card.due.timeIntervalSince1970)  // learn queue: due is epoch seconds
+        case .new:      due = 0
+        }
+        let nowMs = Int(reviewedAt.timeIntervalSince1970 * 1000)
+
+        let review = AnkiCollectionWriter.Review(
+            cardId: cardId,
+            type: type,
+            queue: queue,
+            due: due,
+            ivl: card.interval,
+            factor: AnkiSchema.factor(fromEase: card.ease),
+            reps: card.reps,
+            lapses: card.lapses,
+            cardModSeconds: Int(reviewedAt.timeIntervalSince1970),
+            revlogId: nowMs,
+            ease: rating.rawValue + 1,                          // Rating 0...3 → Anki ease 1...4
+            lastIvl: intervalBefore,
+            revlogType: stateBefore == .review ? 1 : 0,         // 1 = review, 0 = (re)learn
+            timeMs: timeMs,
+            collectionModMs: nowMs
+        )
+
+        do {
+            let writer = try AnkiCollectionWriter(path: CollectionStore.collectionURL.path)
+            try writer.record(review)
+        } catch {
+            print("[mirror] failed to record review for card \(cardId): \(error.localizedDescription)")
+        }
     }
 
     private func toggleStar(_ card: Card) {
