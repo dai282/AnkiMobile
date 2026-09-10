@@ -12,13 +12,18 @@ struct DeckDetailView: View {
     let deck: Deck
 
     @Environment(\.modelContext) private var modelContext
+    /// Observe cards so counts refresh immediately after study ratings.
+    @Query private var allCards: [Card]
 
     @State private var studyMode: StudyMode?
     @State private var isPulling = false
     @State private var pulled = false
     @State private var isDownloading = false
 
-    private var counts: QueueCounts { deck.counts() }
+    private var counts: QueueCounts {
+        let ids = deck.subtreeIDs
+        return allCards.filter { card in card.deck.map { ids.contains($0.id) } ?? false }.queueCounts()
+    }
 
     /// Rough session-length estimate (~0.4 min per due card).
     private var estimatedMinutes: Int {

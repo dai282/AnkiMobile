@@ -26,11 +26,16 @@ struct CollectionImporter {
     struct Summary {
         let decks: Int
         let cards: Int
+        /// Cards present now that weren't in the previous pull (true delta, not the re-import total).
+        let newCards: Int
         let topDeckName: String
     }
 
     func importAll() throws -> Summary {
         let crt = (try? reader.creationEpoch()) ?? 0
+        // Snapshot which Anki cards we already had before we purge + re-import, so we can
+        // report how many are genuinely new rather than the full re-imported count.
+        let previousCardIDs = try existingPulledCardIDs()
         try purgePreviouslyPulled()
 
         // Read cards/notes first so we can skip the always-present empty "Default" deck.
@@ -67,6 +72,7 @@ struct CollectionImporter {
 
         // Cards.
         var imported = 0
+        var importedCardIDs: Set<Int> = []
         for row in cardRows {
             guard let note = notes[row.nid] else { continue }
             let (front, back) = frontBack(from: note.flds)
@@ -88,12 +94,20 @@ struct CollectionImporter {
             card.usn = 0
             context.insert(card)
             imported += 1
+            importedCardIDs.insert(row.id)
         }
 
         try context.save()
 
+        let newCards = importedCardIDs.subtracting(previousCardIDs).count
         let top = deckRows.first { parentName(of: $0.name) == nil }?.name ?? "Collection"
-        return Summary(decks: deckByAnkiId.count, cards: imported, topDeckName: lastComponent(top))
+        return Summary(decks: deckByAnkiId.count, cards: imported, newCards: newCards, topDeckName: lastComponent(top))
+    }
+
+    /// The Anki ids of cards already imported from a previous pull.
+    private func existingPulledCardIDs() throws -> Set<Int> {
+        let existing = try context.fetch(FetchDescriptor<Card>(predicate: #Predicate { $0.ankiCardId != nil }))
+        return Set(existing.compactMap { $0.ankiCardId })
     }
 
     // MARK: - Purge

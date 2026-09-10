@@ -91,6 +91,22 @@ enum StudyMode {
     case reviewsOnly
 }
 
+extension Array where Element == Card {
+    /// Buckets cards into New / Learning / Review. Learning is counted regardless of due
+    /// time (a card rated Again/Hard is still "in learning"); review counts only due cards.
+    func queueCounts(asOf now: Date = .now) -> QueueCounts {
+        var result = QueueCounts()
+        for card in self {
+            switch card.state {
+            case .new: result.new += 1
+            case .learning: result.learning += 1
+            case .review: if card.due <= now { result.review += 1 }
+            }
+        }
+        return result
+    }
+}
+
 extension Deck {
     /// True if this deck is a top-level deck (no parent).
     var isTopLevel: Bool { parent == nil }
@@ -118,27 +134,26 @@ extension Deck {
     /// True when the deck is downloaded and has at least one card.
     var isStudyable: Bool { isEffectivelyDownloaded && !allCards.isEmpty }
 
+    /// The id of this deck and all descendants (for membership checks).
+    var subtreeIDs: Set<UUID> {
+        var ids: Set<UUID> = [id]
+        for sub in subdecks { ids.formUnion(sub.subtreeIDs) }
+        return ids
+    }
+
     /// Counts of due/new cards across this deck and its subdecks.
     func counts(asOf now: Date = .now) -> QueueCounts {
-        var result = QueueCounts()
-        for card in allCards {
-            switch card.state {
-            case .new:
-                result.new += 1
-            case .learning:
-                if card.due <= now { result.learning += 1 }
-            case .review:
-                if card.due <= now { result.review += 1 }
-            }
-        }
-        return result
+        allCards.queueCounts(asOf: now)
     }
 
     /// Builds the ordered list of cards to study for a given mode.
     /// Only downloaded cards are included.
     func studyQueue(mode: StudyMode = .all, asOf now: Date = .now, newLimit: Int = 20) -> [Card] {
         let cards = studyableCards
-        let learning = cards.filter { $0.state == .learning && $0.due <= now }
+        // Include all learning cards regardless of their intraday due time, so the queue
+        // matches how learning is counted in the deck views (queueCounts ignores due for
+        // learning). Learning steps are minutes away; the session re-shows them anyway.
+        let learning = cards.filter { $0.state == .learning }
             .sorted { $0.due < $1.due }
         let review = cards.filter { $0.state == .review && $0.due <= now }
             .sorted { $0.due < $1.due }
