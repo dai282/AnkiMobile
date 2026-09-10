@@ -150,7 +150,10 @@ extension Deck {
     /// Only downloaded cards are included.
     func studyQueue(mode: StudyMode = .all, asOf now: Date = .now, newLimit: Int = 20) -> [Card] {
         let cards = studyableCards
-        let learning = cards.filter { $0.state == .learning && $0.due <= now }
+        // Include all learning cards regardless of their intraday due time, so the queue
+        // matches how learning is counted in the deck views (queueCounts ignores due for
+        // learning). Learning steps are minutes away; the session re-shows them anyway.
+        let learning = cards.filter { $0.state == .learning }
             .sorted { $0.due < $1.due }
         let review = cards.filter { $0.state == .review && $0.due <= now }
             .sorted { $0.due < $1.due }
