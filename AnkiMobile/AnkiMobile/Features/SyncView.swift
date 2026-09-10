@@ -38,10 +38,9 @@ struct SyncView: View {
                       time: "08:15:04"),
     ]
 
-    /// Pull uses the real AnkiWeb engine (V2.2 in progress); progress still uses the mock
-    /// until V2.3 implements the real push.
-    private let pullEngine: any SyncEngine = AnkiWebSyncEngine()
-    private let progressEngine: any SyncEngine = MockSyncEngine()
+    /// Both cloud actions now run against the real AnkiWeb engine (V2.3): pull downloads
+    /// the collection, sync pushes local review progress.
+    private let engine: any SyncEngine = AnkiWebSyncEngine()
     @Environment(AuthController.self) private var auth
 
     // Login form
@@ -379,16 +378,25 @@ struct SyncView: View {
         Task {
             defer { isSyncing = false }
             do {
-                let summary = try await progressEngine.syncProgress(in: modelContext, credentials: creds) { stage in
+                let summary = try await engine.syncProgress(in: modelContext, credentials: creds) { stage in
                     withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
                 }
                 lastSync = "Just now"
-                activity.insert(
-                    ActivityEntry(kind: .progress, title: "Progress Synced",
-                                  detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks · \(String(format: "%.1f", summary.duration))s",
-                                  time: "now"),
-                    at: 0
-                )
+                if summary.reviewsSynced == 0 {
+                    activity.insert(
+                        ActivityEntry(kind: .progress, title: "Already Up to Date",
+                                      detail: "No new review progress to sync.",
+                                      time: "now"),
+                        at: 0
+                    )
+                } else {
+                    activity.insert(
+                        ActivityEntry(kind: .progress, title: "Progress Synced",
+                                      detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks",
+                                      time: "now"),
+                        at: 0
+                    )
+                }
             } catch {
                 syncStageText = "Sync failed: \(error.localizedDescription)"
             }
@@ -401,7 +409,7 @@ struct SyncView: View {
         Task {
             defer { isPulling = false }
             do {
-                let result = try await pullEngine.pullDecks(into: modelContext, credentials: creds)
+                let result = try await engine.pullDecks(into: modelContext, credentials: creds)
                 activity.insert(
                     ActivityEntry(kind: .deck, title: "Deck Updated",
                                   detail: "\(result.deckName) · \(result.newCards) new cards pulled from AnkiWeb · \(String(format: "%.1f", result.sizeMB)) MB",

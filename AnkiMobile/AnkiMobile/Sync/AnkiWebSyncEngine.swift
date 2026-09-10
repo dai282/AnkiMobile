@@ -52,9 +52,9 @@ struct AnkiWebSyncEngine: SyncEngine {
 
     /// Performs the `meta` handshake, which reveals the server's usn/schema and whether
     /// the remote collection is empty — the basis for deciding what (if anything) to pull.
-    func fetchMeta(_ credentials: SyncCredentials) async throws -> ServerMeta {
+    func fetchMeta(_ credentials: SyncCredentials, sessionKey: String? = nil) async throws -> ServerMeta {
         let body = try JSONSerialization.data(withJSONObject: ["v": syncVersion, "cv": clientVersion])
-        let (data, _) = try await send(method: "meta", host: credentials.host, hostKey: credentials.hostKey, body: body)
+        let (data, _) = try await send(method: "meta", host: credentials.host, hostKey: credentials.hostKey, body: body, sessionKey: sessionKey)
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         return ServerMeta(
             modified: (object["mod"] as? NSNumber)?.intValue ?? 0,
@@ -112,12 +112,165 @@ struct AnkiWebSyncEngine: SyncEngine {
         return PullResult(deckName: summary.topDeckName, newCards: summary.cards, sizeMB: mb)
     }
 
+    /// Pushes locally-reviewed cards + revlog to the server via Anki's stateful normal
+    /// sync (protocol v11), driven off the persisted collection's dirty (usn = -1) rows:
+    /// meta → start → applyChanges → chunk(down) → applyChunk(up) → sanityCheck2 → finish.
+    /// We only ever review cards, so decks/notetypes/tags/graves are never dirty — the
+    /// unchunked-changes payload is empty, which collapses the flow to cards + revlog.
     func syncProgress(
         in context: ModelContext,
         credentials: SyncCredentials,
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary {
-        throw SyncError.notImplemented
+        guard CollectionStore.exists else {
+            throw SyncError.network("No collection to sync yet — pull decks first.")
+        }
+        let skey = sessionKey()   // one stable key for the whole stateful sync
+        let host = credentials.host, hostKey = credentials.hostKey
+        let store = try AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path)
+
+        onStage(SyncStage(text: "Checking server…", progress: 0.05))
+        let meta = try await fetchMeta(credentials, sessionKey: skey)
+        if !meta.shouldContinue {
+            throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
+        }
+
+        let local = try store.collectionMeta()
+        if meta.schema != local.scm {
+            throw SyncError.network("The collection changed structurally on the server. Please Pull Decks again.")
+        }
+
+        let serverUsn = meta.usn
+        let localIsNewer = local.mod > meta.modified
+
+        // "Sync Progress" only pushes review changes. If nothing is dirty locally we're
+        // already in sync, so skip the handshake entirely (and the pointless round-trip).
+        let cards = try store.pendingCardArrays(usn: serverUsn)
+        let revlog = try store.pendingRevlogArrays(usn: serverUsn)
+        if cards.isEmpty && revlog.isEmpty {
+            onStage(SyncStage(text: "Already up to date", progress: 1))
+            return SyncSummary(reviewsSynced: 0, decksTouched: 0, duration: 0)
+        }
+        let decksTouched = try store.pendingDeckIDs().count
+
+        do {
+            // 1. start — exchange deletions. We have none; apply any the server reports.
+            onStage(SyncStage(text: "Starting sync…", progress: 0.15))
+            let startBody = try JSONSerialization.data(withJSONObject: ["minUsn": local.usn, "lnewer": localIsNewer])
+            let (startData, _) = try await send(method: "start", host: host, hostKey: hostKey, body: startBody, sessionKey: skey)
+            let graves = jsonObject(startData)
+            try store.applyServerGraves(cards: intList(graves["cards"]), notes: intList(graves["notes"]), decks: intList(graves["decks"]))
+
+            // 2. applyChanges — send empty unchunked changes; reconcile the server's.
+            onStage(SyncStage(text: "Exchanging changes…", progress: 0.3))
+            let changesBody = try JSONSerialization.data(withJSONObject: ["changes": ["models": [], "decks": [[], []], "tags": []]])
+            let (changesData, _) = try await send(method: "applyChanges", host: host, hostKey: hostKey, body: changesBody, sessionKey: skey)
+            try guardNoStructuralServerChanges(jsonObject(changesData))
+
+            // 3. chunk — download server changes until done (usually nothing for a solo user).
+            onStage(SyncStage(text: "Downloading updates…", progress: 0.45))
+            while true {
+                let (chunkData, _) = try await send(method: "chunk", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
+                let chunk = jsonObject(chunkData)
+                try store.applyServerRevlog(rowList(chunk["revlog"]))
+                try store.applyServerCards(rowList(chunk["cards"]))
+                try store.applyServerNotes(rowList(chunk["notes"]))
+                if (chunk["done"] as? Bool) ?? false { break }
+            }
+
+            // 4. applyChunk — upload our changed cards + revlog (chunks of ≤250 items).
+            onStage(SyncStage(text: "Uploading progress…", progress: 0.6))
+            try await uploadChunks(cards: cards, revlog: revlog, host: host, hostKey: hostKey, sessionKey: skey)
+            try store.stampPushed(usn: serverUsn)   // clear usn=-1 before sanity check
+
+            // 5. sanityCheck2 — server compares table counts (due counts & graves ignored).
+            onStage(SyncStage(text: "Verifying…", progress: 0.8))
+            let c = try store.sanityCounts()
+            let sanityBody = try JSONSerialization.data(withJSONObject: [
+                "client": [[0, 0, 0], c.cards, c.notes, c.revlog, c.graves, c.notetypes, c.decks, c.deckConfig]
+            ])
+            let (sanityData, _) = try await send(method: "sanityCheck2", host: host, hostKey: hostKey, body: sanityBody, sessionKey: skey)
+            if (jsonObject(sanityData)["status"] as? String) != "ok" {
+                throw SyncError.network("Server sanity check failed. A fresh Pull Decks may be required.")
+            }
+
+            // 6. finish — commit; response is the new collection mod time (a bare number).
+            onStage(SyncStage(text: "Finalizing…", progress: 0.92))
+            let (finishData, _) = try await send(method: "finish", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
+            let newMod = parseNumber(finishData) ?? local.mod
+            try store.finalize(usn: serverUsn + 1, mod: newMod)
+
+            let sync = SyncState.ensure(in: context)
+            sync.lastSyncedUsn = serverUsn + 1
+            sync.lastSyncMod = newMod
+            try? context.save()
+
+            print("[sync] pushed cards=\(cards.count) revlog=\(revlog.count); anchor usn=\(serverUsn + 1) mod=\(newMod)")
+            onStage(SyncStage(text: "Done", progress: 1))
+            return SyncSummary(reviewsSynced: revlog.count, decksTouched: decksTouched, duration: 0)
+        } catch {
+            // Release the server-side transaction so a retry can start cleanly.
+            _ = try? await send(method: "abort", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
+            throw error
+        }
+    }
+
+    /// Sends our pending cards + revlog in `applyChunk` requests, always finishing with a
+    /// `done: true` chunk (Anki sends one even when there is nothing to upload).
+    private func uploadChunks(cards: [[Any]], revlog: [[Any]], host: String, hostKey: String, sessionKey: String) async throws {
+        let chunkSize = 250
+        var cardQueue = cards, revlogQueue = revlog
+        repeat {
+            var batchRevlog: [[Any]] = [], batchCards: [[Any]] = []
+            var room = chunkSize
+            while room > 0, !revlogQueue.isEmpty { batchRevlog.append(revlogQueue.removeLast()); room -= 1 }
+            while room > 0, !cardQueue.isEmpty { batchCards.append(cardQueue.removeLast()); room -= 1 }
+            let done = cardQueue.isEmpty && revlogQueue.isEmpty
+            let body = try JSONSerialization.data(withJSONObject: [
+                "chunk": ["done": done, "cards": batchCards, "revlog": batchRevlog]
+            ])
+            _ = try await send(method: "applyChunk", host: host, hostKey: hostKey, body: body, sessionKey: sessionKey)
+            if done { break }
+        } while true
+    }
+
+    /// We can send empty decks/notetypes/tags, but we can't *merge* structural changes the
+    /// server sends back — so bail clearly and let the user re-pull if that ever happens.
+    private func guardNoStructuralServerChanges(_ changes: [String: Any]) throws {
+        let models = (changes["models"] as? [Any])?.count ?? 0
+        let tags = (changes["tags"] as? [Any])?.count ?? 0
+        let decksTuple = changes["decks"] as? [Any]
+        let decks = (decksTuple?.first as? [Any])?.count ?? 0
+        let deckConfig = (decksTuple?.dropFirst().first as? [Any])?.count ?? 0
+        if models + tags + decks + deckConfig > 0 {
+            throw SyncError.network("The server has deck or note-type changes this app can't merge yet. Please Pull Decks again.")
+        }
+    }
+
+    // MARK: JSON helpers
+
+    private var emptyBody: Data { Data("{}".utf8) }
+
+    private func jsonObject(_ data: Data) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
+    private func intList(_ value: Any?) -> [Int] {
+        (value as? [Any])?.compactMap { ($0 as? NSNumber)?.intValue } ?? []
+    }
+
+    private func rowList(_ value: Any?) -> [[Any]] {
+        (value as? [[Any]]) ?? []
+    }
+
+    private func parseNumber(_ data: Data) -> Int? {
+        if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), let n = Int(s) {
+            return n
+        }
+        if let n = (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) as? NSNumber {
+            return n.intValue
+        }
+        return nil
     }
 
     // MARK: HTTP plumbing
@@ -127,8 +280,12 @@ struct AnkiWebSyncEngine: SyncEngine {
     /// POSTs to `{host}/sync/{method}` with the `anki-sync` header and a zstd body,
     /// following 308 host-moves manually. Returns the decompressed response and the
     /// host that ultimately served it.
-    private func send(method: String, host: String, hostKey: String, body: Data) async throws -> (Data, String) {
+    /// A stateful normal sync must reuse ONE session key across all its requests, so the
+    /// server can correlate start → chunk → finish. `sessionKey` defaults to a fresh random
+    /// key, which is correct for the one-shot login/meta/download calls.
+    private func send(method: String, host: String, hostKey: String, body: Data, sessionKey: String? = nil) async throws -> (Data, String) {
         var baseHost = normalizedHost(host)
+        let skey = sessionKey ?? self.sessionKey()
         let compressed = try Zstd.compress(body)
 
         for _ in 0..<4 {
@@ -139,7 +296,7 @@ struct AnkiWebSyncEngine: SyncEngine {
             }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.setValue(try syncHeader(hostKey: hostKey), forHTTPHeaderField: "anki-sync")
+            request.setValue(try syncHeader(hostKey: hostKey, sessionKey: skey), forHTTPHeaderField: "anki-sync")
             request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             request.httpBody = compressed
 
@@ -184,12 +341,12 @@ struct AnkiWebSyncEngine: SyncEngine {
         return comp.port.map { "\(scheme)://\(host):\($0)" } ?? "\(scheme)://\(host)"
     }
 
-    private func syncHeader(hostKey: String) throws -> String {
+    private func syncHeader(hostKey: String, sessionKey: String) throws -> String {
         let header: [String: Any] = [
             "v": syncVersion,
             "k": hostKey,
             "c": clientVersion,
-            "s": sessionKey(),
+            "s": sessionKey,
         ]
         let data = try JSONSerialization.data(withJSONObject: header)
         return String(data: data, encoding: .utf8) ?? "{}"
