@@ -123,7 +123,7 @@ struct AnkiWebSyncEngine: SyncEngine {
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary {
         guard CollectionStore.exists else {
-            throw SyncError.network("No collection to sync yet — pull decks first.")
+            throw SyncError.network("No decks to sync yet — use Download Decks first.")
         }
         let skey = sessionKey()   // one stable key for the whole stateful sync
         let host = credentials.host, hostKey = credentials.hostKey
@@ -137,17 +137,20 @@ struct AnkiWebSyncEngine: SyncEngine {
 
         let local = try store.collectionMeta()
         if meta.schema != local.scm {
-            throw SyncError.network("The collection changed structurally on the server. Please Pull Decks again.")
+            throw SyncError.network("The collection changed structurally on the server. Use Download Decks to get the latest.")
         }
 
         let serverUsn = meta.usn
         let localIsNewer = local.mod > meta.modified
 
-        // "Sync Progress" only pushes review changes. If nothing is dirty locally we're
-        // already in sync, so skip the handshake entirely (and the pointless round-trip).
+        // Two-way progress sync. Run the handshake if EITHER side has changes: local
+        // reviews to push (dirty usn=-1 rows) OR the server has moved since our last
+        // sync (its mod differs from ours). Only skip when both sides are even.
         let cards = try store.pendingCardArrays(usn: serverUsn)
         let revlog = try store.pendingRevlogArrays(usn: serverUsn)
-        if cards.isEmpty && revlog.isEmpty {
+        let haveLocalChanges = !cards.isEmpty || !revlog.isEmpty
+        let serverMoved = meta.modified != local.mod
+        if !haveLocalChanges && !serverMoved {
             onStage(SyncStage(text: "Already up to date", progress: 1))
             return SyncSummary(reviewsSynced: 0, decksTouched: 0, duration: 0)
         }
@@ -165,16 +168,22 @@ struct AnkiWebSyncEngine: SyncEngine {
             onStage(SyncStage(text: "Exchanging changes…", progress: 0.3))
             let changesBody = try JSONSerialization.data(withJSONObject: ["changes": ["models": [], "decks": [[], []], "tags": []]])
             let (changesData, _) = try await send(method: "applyChanges", host: host, hostKey: hostKey, body: changesBody, sessionKey: skey)
-            try guardNoStructuralServerChanges(jsonObject(changesData))
+            try guardNoNewStructuralObjects(jsonObject(changesData), store: store)
 
-            // 3. chunk — download server changes until done (usually nothing for a solo user).
+            // 3. chunk — download server changes until done, applying each to our collection.
             onStage(SyncStage(text: "Downloading updates…", progress: 0.45))
+            var reviewsPulled = 0
             while true {
                 let (chunkData, _) = try await send(method: "chunk", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
                 let chunk = jsonObject(chunkData)
-                try store.applyServerRevlog(rowList(chunk["revlog"]))
-                try store.applyServerCards(rowList(chunk["cards"]))
-                try store.applyServerNotes(rowList(chunk["notes"]))
+                let revlogRows = rowList(chunk["revlog"]), cardRows = rowList(chunk["cards"]), noteRows = rowList(chunk["notes"])
+                try store.applyServerRevlog(revlogRows)
+                try store.applyServerCards(cardRows)
+                try store.applyServerNotes(noteRows)
+                // Count reviews (revlog rows) as the "pulled" unit — symmetric with the pushed
+                // count. One study pulls a card row + a revlog row; reporting reviews avoids
+                // double-counting the paired card update.
+                reviewsPulled += revlogRows.count
                 if (chunk["done"] as? Bool) ?? false { break }
             }
 
@@ -200,15 +209,23 @@ struct AnkiWebSyncEngine: SyncEngine {
             let newMod = parseNumber(finishData) ?? local.mod
             try store.finalize(usn: serverUsn + 1, mod: newMod)
 
+            // Re-project the merged collection into SwiftData so anything pulled down
+            // during this sync (new cards, updated scheduling) shows up in the UI.
+            onStage(SyncStage(text: "Applying changes…", progress: 0.97))
+            let reader = try AnkiCollectionReader(path: CollectionStore.collectionURL.path)
+            let projected = try CollectionImporter(reader: reader, context: context).importAll()
+
             let sync = SyncState.ensure(in: context)
             sync.lastSyncedUsn = serverUsn + 1
             sync.lastSyncMod = newMod
             try? context.save()
 
-            print("[sync] pushed cards=\(cards.count) revlog=\(revlog.count); anchor usn=\(serverUsn + 1) mod=\(newMod)")
+            _ = projected  // re-projection side-effect: SwiftData now reflects the merged collection
+            print("[sync] pushed cards=\(cards.count) revlog=\(revlog.count); pulled reviews=\(reviewsPulled); anchor usn=\(serverUsn + 1) mod=\(newMod)")
             onStage(SyncStage(text: "Done", progress: 1))
-            return SyncSummary(reviewsSynced: revlog.count, decksTouched: decksTouched, duration: 0)
+            return SyncSummary(reviewsSynced: revlog.count, decksTouched: decksTouched, duration: 0, reviewsPulled: reviewsPulled)
         } catch {
+            print("[sync] failed: \(error.localizedDescription)")
             // Release the server-side transaction so a retry can start cleanly.
             _ = try? await send(method: "abort", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
             throw error
@@ -234,16 +251,21 @@ struct AnkiWebSyncEngine: SyncEngine {
         } while true
     }
 
-    /// We can send empty decks/notetypes/tags, but we can't *merge* structural changes the
-    /// server sends back — so bail clearly and let the user re-pull if that ever happens.
-    private func guardNoStructuralServerChanges(_ changes: [String: Any]) throws {
-        let models = (changes["models"] as? [Any])?.count ?? 0
-        let tags = (changes["tags"] as? [Any])?.count ?? 0
-        let decksTuple = changes["decks"] as? [Any]
-        let decks = (decksTuple?.first as? [Any])?.count ?? 0
-        let deckConfig = (decksTuple?.dropFirst().first as? [Any])?.count ?? 0
-        if models + tags + decks + deckConfig > 0 {
-            throw SyncError.network("The server has deck or note-type changes this app can't merge yet. Please Pull Decks again.")
+    /// Updates to existing decks/note types are fine to ignore (sanity only compares row
+    /// counts, which don't change). But a *brand-new* deck or note type is unmergeable —
+    /// its cards/notes would reference something we don't have — so bail and point the user
+    /// at Download Decks. We detect "new" by comparing ids against what we already hold.
+    private func guardNoNewStructuralObjects(_ changes: [String: Any], store: AnkiCollectionSyncStore) throws {
+        let models = (changes["models"] as? [[String: Any]]) ?? []
+        let decks = ((changes["decks"] as? [Any])?.first as? [[String: Any]]) ?? []
+
+        let localDeckIDs = try store.idSet(table: "decks")
+        let localModelIDs = try store.idSet(table: "notetypes")
+        let newDecks = decks.compactMap { anyID($0["id"]) }.contains { !localDeckIDs.contains($0) }
+        let newModels = models.compactMap { anyID($0["id"]) }.contains { !localModelIDs.contains($0) }
+
+        if newDecks || newModels {
+            throw SyncError.network("The server has new decks or note types. Use Download Decks to get them.")
         }
     }
 
@@ -257,6 +279,13 @@ struct AnkiWebSyncEngine: SyncEngine {
 
     private func intList(_ value: Any?) -> [Int] {
         (value as? [Any])?.compactMap { ($0 as? NSNumber)?.intValue } ?? []
+    }
+
+    /// Deck/notetype ids arrive as strings in the schema-11 payloads; cards/graves as numbers.
+    private func anyID(_ value: Any?) -> Int? {
+        if let n = value as? NSNumber { return n.intValue }
+        if let s = value as? String { return Int(s) }
+        return nil
     }
 
     private func rowList(_ value: Any?) -> [[Any]] {

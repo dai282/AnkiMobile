@@ -35,11 +35,13 @@ struct SyncStage {
     let progress: Double
 }
 
-/// The outcome of pushing local review progress.
+/// The outcome of a two-way progress sync.
 struct SyncSummary {
     let reviewsSynced: Int
     let decksTouched: Int
     let duration: Double
+    /// Reviews pulled down from the server during the sync (symmetric with reviewsSynced).
+    var reviewsPulled: Int = 0
 }
 
 /// The outcome of pulling decks from the cloud.

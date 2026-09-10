@@ -190,7 +190,7 @@ struct SyncView: View {
             .disabled(isSyncing || isPulling)
 
             Button(action: pullDecks) {
-                actionLabel(isPulling ? "Pulling decks…" : "Pull Decks from Cloud",
+                actionLabel(isPulling ? "Downloading decks…" : "Download Decks",
                             system: "icloud.and.arrow.down",
                             spinning: isPulling,
                             filled: false)
@@ -382,25 +382,25 @@ struct SyncView: View {
                     withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
                 }
                 lastSync = "Just now"
-                if summary.reviewsSynced == 0 {
-                    activity.insert(
-                        ActivityEntry(kind: .progress, title: "Already Up to Date",
-                                      detail: "No new review progress to sync.",
-                                      time: "now"),
-                        at: 0
-                    )
-                } else {
-                    activity.insert(
-                        ActivityEntry(kind: .progress, title: "Progress Synced",
-                                      detail: "\(summary.reviewsSynced) reviews synced across \(summary.decksTouched) decks",
-                                      time: "now"),
-                        at: 0
-                    )
-                }
+                let entry = syncActivityEntry(pushed: summary.reviewsSynced, pulled: summary.reviewsPulled)
+                activity.insert(entry, at: 0)
             } catch {
                 syncStageText = "Sync failed: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Builds a two-way sync activity row from how much was pushed up and pulled down.
+    private func syncActivityEntry(pushed: Int, pulled: Int) -> ActivityEntry {
+        if pushed == 0 && pulled == 0 {
+            return ActivityEntry(kind: .progress, title: "Already Up to Date",
+                                 detail: "No changes to sync.", time: "now")
+        }
+        var parts: [String] = []
+        if pushed > 0 { parts.append("\(pushed) pushed") }
+        if pulled > 0 { parts.append("\(pulled) pulled") }
+        return ActivityEntry(kind: .progress, title: "Progress Synced",
+                             detail: parts.joined(separator: " · "), time: "now")
     }
 
     private func pullDecks() {

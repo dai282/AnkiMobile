@@ -221,17 +221,52 @@ always works offline; sync is an explicit action.
   - [ ] Guarded, not merged: if the server returns structural changes (decks/notetypes/tags) or
         chunked note/card data, we currently bail and ask the user to re-Pull. Full two-way merge
         is future work.
+- **V2.3d — Two-way Sync Progress** ✅
+  - [x] **Sync Progress** is now two-way: pushes local reviews *and* pulls the server's
+        review/scheduling changes (and new cards in existing decks, via `chunk`). Runs the
+        handshake when either side has changed; skips only when both are even.
+  - [x] After `finish`, re-project the merged `.anki2` into SwiftData so pulled changes show
+        in the UI. Activity reports "N pushed · M pulled".
+  - [x] Clear separation of concerns: **Download Decks** is now bootstrap / full re-download
+        only (and the path for brand-new decks/note types Sync can't merge — Sync tells the
+        user to use it). **Sync Progress** owns ongoing two-way progress.
 - **Remaining for V2.3**
-  - [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal.
+  - [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal (fallback when
+        the server rejects sanity / schemas diverge; the common case auto-merges by mtime).
   - [ ] Point at real AnkiWeb (currently verified only against a local sync server).
 
 ### V2.4 — Hardening
+- [ ] **Guard Pull when local progress is unpushed:** Pull is a full download-and-replace that
+      overwrites the persisted `.anki2` and would discard un-synced reviews (`usn=-1`). Detect
+      pending changes and confirm/auto-Sync-first before replacing.
 - [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
 - [ ] Wire the currently-cosmetic **Offline Mode / Media Syncing / Prune Cache** controls, or
       remove them if we decide media is out of scope.
 - [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
 
-### V2.5 — Media (audio/images)
+### V2.5 — New-card daily limits (scheduler parity)
+> Desktop caps the deck's **New** count at `deck_config.new.perDay` (default 20) and decrements
+> it as new cards are introduced each day. We currently show *every* `.new` card (e.g. 101),
+> so the counts diverge from desktop. This needs real per-day state, not a naive cap.
+- [ ] Read each deck's `deck_config` `new.perDay` (and `rev.perDay`) from the pulled collection.
+- [ ] Track "new introduced today" per deck (day cutoff via `col.crt` / rollover) so the New
+      count decrements as you study, matching Anki.
+- [ ] Apply the limit to the Decks/DeckDetail counts and the study queue consistently.
+
+### V2.6 — Enhancements & Sync UX
+> Make the push/pull asymmetry legible instead of guesswork. Today "Sync Progress" is push-only
+> and "Pull Decks" is a full download; the user can't tell when they're ahead of / behind the cloud.
+- [ ] **Ahead/behind indicators (two):** one for *progress* (do we have local reviews to push?
+      are there server reviews to pull?) and one for *deck state* (does the server have card/deck
+      changes we don't?). Drive them off the `meta` handshake (server `usn`/`mod`) vs our anchor.
+- [ ] **"Sync before Pull" prompt:** when local progress differs from the cloud, clicking Pull
+      Decks asks to Sync first (ties into the V2.4 guard).
+- [ ] Honest Sync messaging when the **server is ahead**: "Up to date locally — Pull to get N
+      changes" instead of a flat "Already up to date".
+- [ ] (Stretch) Two-way reconcile on Sync: apply downloaded server changes to the SwiftData
+      projection too, so Sync can pull progress without a full re-download.
+
+### V2.7 — Media (audio/images)
 - [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.
 - [ ] Store media in the app sandbox; play answer audio via AVAudioPlayer (wire the speaker button).
 

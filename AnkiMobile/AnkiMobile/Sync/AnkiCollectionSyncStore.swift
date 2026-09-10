@@ -122,6 +122,14 @@ final class AnkiCollectionSyncStore {
         )
     }
 
+    /// The set of `id`s present in a table (e.g. decks, notetypes) — used to tell a
+    /// genuinely new server object apart from an update to one we already have.
+    func idSet(table: String) throws -> Set<Int> {
+        var ids: Set<Int> = []
+        try forEachRow("SELECT id FROM \(table)") { stmt in ids.insert(Int(sqlite3_column_int64(stmt, 0))) }
+        return ids
+    }
+
     // MARK: - Remote → local (things the server sends us)
 
     /// Deletes rows the server reports as deleted. (We don't record graves of our own.)
