@@ -139,6 +139,13 @@ final class AnkiCollectionSyncStore {
         return ids
     }
 
+    /// Number of reviews recorded locally but not yet pushed (revlog rows with usn = -1).
+    func pendingReviewCount() throws -> Int {
+        var value = 0
+        try forEachRow("SELECT count(*) FROM revlog WHERE usn=-1") { stmt in value = Int(sqlite3_column_int64(stmt, 0)) }
+        return value
+    }
+
     /// Clears the pending flag on everything we just pushed by stamping the server USN.
     func stampPushed(usn serverUsn: Int) throws {
         try run("UPDATE cards SET usn=? WHERE usn=-1", [serverUsn])
