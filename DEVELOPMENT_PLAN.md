@@ -190,17 +190,40 @@ always works offline; sync is an explicit action.
       Idempotent re-pull (replaces prior pulled decks/cards; keeps local seeded decks).
 - [x] Surface real pull results in the activity log. **Verified with a real 101-card deck.**
 
-### V2.3 — Sync progress (two-way)
+### V2.3 — Sync progress (push) ✅ core done
 > **Architecture note:** real push is harder than pull. Our full `download` is *not* a normal-sync
-> anchor, and we discard the `.anki2`. To push incrementally, we must keep a **persisted native
-> `.anki2` collection as the sync source of truth**, mirror our study reviews into it (update
-> `cards` + insert `revlog`, mark `usn=-1`, bump `col.mod`), then run the normal incremental
-> protocol (`start`→`applyChanges`→`chunk`/`applyChunk`→`sanityCheck`→`finish`). Note `CardEntry`/
-> `RevlogEntry` are serialized as JSON **arrays** (serde tuples). Direction decision pending.
-- [ ] Persist the downloaded `.anki2`; mirror reviews into it.
-- [ ] Implement incremental push (`applyChunk`) + receive (`chunk`) with usn logic.
-- [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal.
-- [ ] Real activity log entries from actual results.
+> anchor. To push incrementally we keep a **persisted native `.anki2` collection as the sync source
+> of truth**, mirror our study reviews into it (update `cards` + insert `revlog`, mark `usn=-1`,
+> bump `col.mod`), then run the normal incremental protocol
+> (`start`→`applyChanges`→`chunk`/`applyChunk`→`sanityCheck2`→`finish`). `CardEntry`/`RevlogEntry`
+> serialize as JSON **arrays** (serde tuples). Because we only ever *review* cards (never edit
+> decks/notes/notetypes), the unchunked-changes payload is empty — the flow reduces to pushing
+> changed **cards + revlog**.
+
+- **V2.3a — Persist + anchor** ✅
+  - [x] Persist the downloaded `.anki2` at a stable Application Support path (`CollectionStore`)
+        instead of a temp file.
+  - [x] Record the server sync anchor after a pull (`SyncState`: usn/mod/scm/crt, `hasCollection`).
+- **V2.3b — Mirror reviews** ✅
+  - [x] On every rating, mirror into the native collection (`AnkiCollectionWriter`): update the
+        `cards` row (type/queue/due/ivl/factor/reps/lapses, `mod`, `usn=-1`), append a `revlog`
+        entry (`usn=-1`), bump `col.mod` (leave `col.scm` untouched). No-op for locally-seeded
+        cards; failures are logged, never fatal.
+- **V2.3c — Incremental push protocol** ✅
+  - [x] Stateful normal sync (v11) driven off the dirty rows (`AnkiCollectionSyncStore`): one
+        stable session key across the whole sync; stamp pushed cards/revlog with the server USN
+        before `sanityCheck2`; finalize `col.usn = serverUsn+1`, `col.mod` from `finish`.
+  - [x] Register Anki's custom `unicase` collation on every native-collection connection so
+        index-backed queries (e.g. `count(*) FROM decks`) work (`AnkiSQLite`).
+  - [x] Short-circuit to "Already up to date" when nothing is pending locally.
+  - [x] Wire the Sync tab's **Sync Progress** action to the real engine; real activity entries.
+        **Verified against a self-hosted Anki sync server** (`[sync] pushed cards/revlog`).
+  - [ ] Guarded, not merged: if the server returns structural changes (decks/notetypes/tags) or
+        chunked note/card data, we currently bail and ask the user to re-Pull. Full two-way merge
+        is future work.
+- **Remaining for V2.3**
+  - [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal.
+  - [ ] Point at real AnkiWeb (currently verified only against a local sync server).
 
 ### V2.4 — Hardening
 - [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
