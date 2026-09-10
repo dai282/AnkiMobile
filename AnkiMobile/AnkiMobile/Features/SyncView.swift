@@ -410,9 +410,12 @@ struct SyncView: View {
             defer { isPulling = false }
             do {
                 let result = try await engine.pullDecks(into: modelContext, credentials: creds)
+                let cardsText = result.newCards == 0
+                    ? "no new cards"
+                    : "\(result.newCards) new card\(result.newCards == 1 ? "" : "s")"
                 activity.insert(
                     ActivityEntry(kind: .deck, title: "Deck Updated",
-                                  detail: "\(result.deckName) · \(result.newCards) new cards pulled from AnkiWeb · \(String(format: "%.1f", result.sizeMB)) MB",
+                                  detail: "\(result.deckName) · \(cardsText) · \(String(format: "%.1f", result.sizeMB)) MB",
                                   time: "now"),
                     at: 0
                 )

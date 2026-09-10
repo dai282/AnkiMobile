@@ -106,10 +106,10 @@ struct AnkiWebSyncEngine: SyncEngine {
         sync.hasCollection = true
         try? context.save()
 
-        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards); persisted \(CollectionStore.collectionURL.lastPathComponent); anchor usn=\(meta.usn) mod=\(meta.modified) scm=\(meta.schema)")
+        print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) new=\(summary.newCards); persisted \(CollectionStore.collectionURL.lastPathComponent); anchor usn=\(meta.usn) mod=\(meta.modified) scm=\(meta.schema)")
 
         let mb = Double(dbBytes.count) / (1024 * 1024)
-        return PullResult(deckName: summary.topDeckName, newCards: summary.cards, sizeMB: mb)
+        return PullResult(deckName: summary.topDeckName, newCards: summary.newCards, sizeMB: mb)
     }
 
     /// Pushes locally-reviewed cards + revlog to the server via Anki's stateful normal
