@@ -17,6 +17,9 @@ enum SyncError: LocalizedError {
     case rateLimited
     case network(String)
     case notImplemented
+    /// A normal sync can't reconcile the two collections (schema change, new structural
+    /// objects, or a failed sanity check). The user must choose Force Upload or Download.
+    case fullSyncRequired(String)
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +28,7 @@ enum SyncError: LocalizedError {
         case .rateLimited: return "Too many attempts. Please wait a moment and try again."
         case .network(let message): return message
         case .notImplemented: return "Not implemented yet."
+        case .fullSyncRequired(let reason): return reason
         }
     }
 }
@@ -72,4 +76,8 @@ protocol SyncEngine {
         credentials: SyncCredentials,
         onStage: @escaping (SyncStage) -> Void
     ) async throws -> SyncSummary
+
+    /// Conflict resolution: replace the *server's* collection with our local one
+    /// (Anki's full upload). The counterpart "force download" is just `pullDecks`.
+    func forceUpload(in context: ModelContext, credentials: SyncCredentials) async throws
 }

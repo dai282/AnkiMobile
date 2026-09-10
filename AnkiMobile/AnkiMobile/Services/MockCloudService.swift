@@ -46,6 +46,11 @@ struct MockSyncEngine: SyncEngine {
         return SyncSummary(reviewsSynced: min(unsynced, 999), decksTouched: 3, duration: 0.8)
     }
 
+    func forceUpload(in context: ModelContext, credentials: SyncCredentials) async throws {
+        try? await Task.sleep(for: .milliseconds(500))
+        // The mock has no server; treat force-upload as a successful no-op.
+    }
+
     @discardableResult
     func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
         try? await Task.sleep(for: .milliseconds(900))

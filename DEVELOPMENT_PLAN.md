@@ -230,9 +230,13 @@ always works offline; sync is an explicit action.
   - [x] Clear separation of concerns: **Download Decks** is now bootstrap / full re-download
         only (and the path for brand-new decks/note types Sync can't merge — Sync tells the
         user to use it). **Sync Progress** owns ongoing two-way progress.
+- **V2.3e — Conflict resolution** ✅
+  - [x] When a normal sync can't reconcile (schema mismatch, new decks/note types, or a failed
+        sanity check) `syncProgress` throws `fullSyncRequired`; the Sync tab shows a **Force
+        Upload / Force Download** dialog. The common case still auto-merges by mtime.
+  - [x] **Force Download** = full re-download (reuses Download Decks). **Force Upload** = Anki's
+        full upload (`before_upload` prep → POST `/sync/upload`), making this device the cloud copy.
 - **Remaining for V2.3**
-  - [ ] Conflict resolution UI: **Force Upload / Force Download** fallback modal (fallback when
-        the server rejects sanity / schemas diverge; the common case auto-merges by mtime).
   - [ ] Point at real AnkiWeb (currently verified only against a local sync server).
 
 ### V2.4 — Hardening

@@ -137,7 +137,7 @@ struct AnkiWebSyncEngine: SyncEngine {
 
         let local = try store.collectionMeta()
         if meta.schema != local.scm {
-            throw SyncError.network("The collection changed structurally on the server. Use Download Decks to get the latest.")
+            throw SyncError.fullSyncRequired("The collection changed structurally on the server (schema mismatch). Choose which copy to keep.")
         }
 
         let serverUsn = meta.usn
@@ -200,7 +200,7 @@ struct AnkiWebSyncEngine: SyncEngine {
             ])
             let (sanityData, _) = try await send(method: "sanityCheck2", host: host, hostKey: hostKey, body: sanityBody, sessionKey: skey)
             if (jsonObject(sanityData)["status"] as? String) != "ok" {
-                throw SyncError.network("Server sanity check failed. A fresh Pull Decks may be required.")
+                throw SyncError.fullSyncRequired("The local and server collections disagree after merge. Choose which copy to keep.")
             }
 
             // 6. finish — commit; response is the new collection mod time (a bare number).
@@ -230,6 +230,41 @@ struct AnkiWebSyncEngine: SyncEngine {
             _ = try? await send(method: "abort", host: host, hostKey: hostKey, body: emptyBody, sessionKey: skey)
             throw error
         }
+    }
+
+    /// Force Upload: make our local collection the server's authoritative copy (Anki's full
+    /// upload). Prepares the collection (clear pending usns/graves, bump usn + schema), then
+    /// POSTs the whole `.anki2` to `/sync/upload`. The server validates and replaces its file.
+    func forceUpload(in context: ModelContext, credentials: SyncCredentials) async throws {
+        guard CollectionStore.exists else {
+            throw SyncError.network("Nothing to upload — use Download Decks first.")
+        }
+
+        // Prepare + checkpoint in a scope so the connection closes before we read the file.
+        do {
+            let store = try AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path)
+            try store.prepareForFullUpload(now: .now)
+            store.close()
+        }
+
+        let bytes = try Data(contentsOf: CollectionStore.collectionURL)
+        let (response, _) = try await send(method: "upload", host: credentials.host,
+                                           hostKey: credentials.hostKey, body: bytes, sessionKey: sessionKey())
+        let text = (String(data: response, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.hasPrefix("OK") else {
+            throw SyncError.network(text.isEmpty ? "Upload was rejected by the server." : text)
+        }
+
+        // Local is now authoritative and matches the server; refresh our anchor.
+        let store = try AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path)
+        let meta = try store.collectionMeta()
+        let sync = SyncState.ensure(in: context)
+        sync.lastSyncedUsn = meta.usn
+        sync.lastSyncMod = meta.mod
+        sync.schemaMod = meta.scm
+        sync.hasCollection = true
+        try? context.save()
+        print("[upload] forced full upload OK; anchor usn=\(meta.usn) mod=\(meta.mod) scm=\(meta.scm)")
     }
 
     /// Sends our pending cards + revlog in `applyChunk` requests, always finishing with a
@@ -265,7 +300,7 @@ struct AnkiWebSyncEngine: SyncEngine {
         let newModels = models.compactMap { anyID($0["id"]) }.contains { !localModelIDs.contains($0) }
 
         if newDecks || newModels {
-            throw SyncError.network("The server has new decks or note types. Use Download Decks to get them.")
+            throw SyncError.fullSyncRequired("The server has new decks or note types this app can't merge yet. Choose which copy to keep.")
         }
     }
 

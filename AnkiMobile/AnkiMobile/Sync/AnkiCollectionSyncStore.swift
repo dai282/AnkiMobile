@@ -61,6 +61,43 @@ final class AnkiCollectionSyncStore {
         if db != nil { sqlite3_close(db) }
     }
 
+    /// Closes the connection now (deterministically), so the file can be read back for upload.
+    func close() {
+        if db != nil { sqlite3_close(db); db = nil }
+    }
+
+    // MARK: - Full upload preparation (Anki's before_upload)
+
+    /// Prepares the collection to become the server's authoritative copy: drop graves,
+    /// clear pending/usn markers, bump the collection usn + schema time, then checkpoint
+    /// the WAL so the file on disk is complete and self-contained for upload.
+    func prepareForFullUpload(now: Date) throws {
+        let nowMs = Int(now.timeIntervalSince1970 * 1000)
+        try exec("BEGIN IMMEDIATE")
+        do {
+            try run("DELETE FROM graves", [])
+            // Cards/notes/revlog: only pending rows need their -1 cleared.
+            for table in ["cards", "notes", "revlog"] {
+                try run("UPDATE \(table) SET usn=0 WHERE usn=-1", [])
+            }
+            // Small tables: reset all usns (matches before_upload's clear_*_usns).
+            for table in ["decks", "deck_config", "notetypes", "tags"] {
+                try run("UPDATE \(table) SET usn=0", [])
+            }
+            try run("UPDATE col SET usn = usn + 1, scm=?, mod=?, ls=? WHERE id=1", [nowMs, nowMs, nowMs])
+            try exec("COMMIT")
+        } catch {
+            try? exec("ROLLBACK")
+            throw error
+        }
+        // Fold the WAL back into the main db file so the uploaded bytes are complete.
+        try exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    }
+
+    private func exec(_ sql: String) throws {
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { throw StoreError.query(lastError(sql)) }
+    }
+
     // MARK: - Collection metadata
 
     func collectionMeta() throws -> CollectionMeta {

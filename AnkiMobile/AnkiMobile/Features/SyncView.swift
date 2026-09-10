@@ -18,6 +18,12 @@ private struct ActivityEntry: Identifiable {
     let time: String
 }
 
+/// Drives the Force Upload / Download conflict dialog when a normal sync can't reconcile.
+private struct ConflictPrompt: Identifiable {
+    let id = UUID()
+    let reason: String
+}
+
 struct SyncView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -26,6 +32,7 @@ struct SyncView: View {
 
     @State private var isSyncing = false
     @State private var isPulling = false
+    @State private var conflict: ConflictPrompt?
     @State private var syncProgress: Double = 0
     @State private var syncStageText = ""
     @State private var lastSync = "Today at 09:37"
@@ -69,6 +76,16 @@ struct SyncView: View {
             }
             .background(Palette.canvas.ignoresSafeArea())
             .navigationTitle("Sync & Account")
+            .sheet(item: $conflict) { prompt in
+                ConflictSheet(
+                    reason: prompt.reason,
+                    onDownload: { conflict = nil; pullDecks() },
+                    onUpload: { conflict = nil; forceUpload() },
+                    onCancel: { conflict = nil }
+                )
+                .presentationDetents([.medium])
+                .presentationBackground(Palette.canvas)
+            }
         }
     }
 
@@ -384,8 +401,31 @@ struct SyncView: View {
                 lastSync = "Just now"
                 let entry = syncActivityEntry(pushed: summary.reviewsSynced, pulled: summary.reviewsPulled)
                 activity.insert(entry, at: 0)
+            } catch SyncError.fullSyncRequired(let reason) {
+                conflict = ConflictPrompt(reason: reason)
             } catch {
                 syncStageText = "Sync failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Force Upload: make this device's collection the cloud copy (conflict resolution).
+    private func forceUpload() {
+        guard let creds = auth.credentials else { return }
+        isSyncing = true
+        syncProgress = 0
+        Task {
+            defer { isSyncing = false }
+            do {
+                try await engine.forceUpload(in: modelContext, credentials: creds)
+                lastSync = "Just now"
+                activity.insert(
+                    ActivityEntry(kind: .progress, title: "Uploaded to Cloud",
+                                  detail: "This device's collection is now the cloud copy.", time: "now"),
+                    at: 0
+                )
+            } catch {
+                syncStageText = "Upload failed: \(error.localizedDescription)"
             }
         }
     }
@@ -430,9 +470,97 @@ struct SyncView: View {
     }
 }
 
+// MARK: - Conflict resolution sheet
+
+/// Themed Force Upload / Download chooser shown when a normal sync can't reconcile.
+private struct ConflictSheet: View {
+    let reason: String
+    let onDownload: () -> Void
+    let onUpload: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: Metrics.spaceMd) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(Palette.warning)
+                .padding(.top, Metrics.spaceMd)
+
+            VStack(spacing: Metrics.spaceXs) {
+                Text("Sync Conflict")
+                    .font(AppFont.headlineLg)
+                    .foregroundStyle(Palette.textPrimary)
+                Text(reason)
+                    .font(AppFont.bodyMd)
+                    .foregroundStyle(Palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: Metrics.spaceXs) {
+                choice(icon: "icloud.and.arrow.down", title: "Download from Cloud",
+                       subtitle: "Replace this device's copy with the cloud's.",
+                       color: Palette.primary, action: onDownload)
+                choice(icon: "icloud.and.arrow.up", title: "Upload to Cloud",
+                       subtitle: "Replace the cloud with this device's copy.",
+                       color: Palette.warning, action: onUpload)
+            }
+
+            Button(action: onCancel) {
+                Text("Cancel")
+                    .font(AppFont.labelMd)
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Metrics.touchComfortable)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Metrics.screenMargin)
+        .padding(.bottom, Metrics.spaceSm)
+        .frame(maxWidth: .infinity)
+        .background(Palette.canvas)
+    }
+
+    private func choice(icon: String, title: String, subtitle: String,
+                        color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Metrics.spaceSm) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundStyle(color)
+                    .frame(width: 34, height: 34)
+                    .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: Metrics.radiusSmall, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(AppFont.labelMd).foregroundStyle(Palette.textPrimary)
+                    Text(subtitle).font(AppFont.bodySm).foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textMuted)
+            }
+            .padding(Metrics.spaceSm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                    .strokeBorder(color.opacity(0.28), lineWidth: 1)
+            )
+        }
+    }
+}
+
 #Preview {
     SyncView()
         .modelContainer(sampleContainer())
         .environment(AuthController(engine: MockSyncEngine()))
         .preferredColorScheme(.dark)
+}
+
+#Preview("Conflict sheet") {
+    ConflictSheet(
+        reason: "The collection changed structurally on the server (schema mismatch). Choose which copy to keep.",
+        onDownload: {}, onUpload: {}, onCancel: {}
+    )
+    .preferredColorScheme(.dark)
 }
