@@ -33,4 +33,11 @@ enum CollectionStore {
             try? fm.removeItem(atPath: collectionURL.path + suffix)
         }
     }
+
+    /// Reviews recorded locally but not yet pushed. Used to warn before a Download/Force-Download
+    /// replaces the collection and would discard them. Zero if there's no collection yet.
+    static func pendingReviewCount() -> Int {
+        guard exists, let store = try? AnkiCollectionSyncStore(path: collectionURL.path) else { return 0 }
+        return (try? store.pendingReviewCount()) ?? 0
+    }
 }

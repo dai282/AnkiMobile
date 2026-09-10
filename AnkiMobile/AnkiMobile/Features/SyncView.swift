@@ -24,6 +24,12 @@ private struct ConflictPrompt: Identifiable {
     let reason: String
 }
 
+/// Drives the "you have unsynced reviews" warning before a Download replaces the collection.
+private struct PullGuardPrompt: Identifiable {
+    let id = UUID()
+    let pending: Int
+}
+
 struct SyncView: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -33,6 +39,7 @@ struct SyncView: View {
     @State private var isSyncing = false
     @State private var isPulling = false
     @State private var conflict: ConflictPrompt?
+    @State private var pullGuard: PullGuardPrompt?
     @State private var syncProgress: Double = 0
     @State private var syncStageText = ""
     @State private var lastSync = "Today at 09:37"
@@ -79,12 +86,21 @@ struct SyncView: View {
             .sheet(item: $conflict) { prompt in
                 ConflictSheet(
                     reason: prompt.reason,
-                    onDownload: { conflict = nil; pullDecks() },
+                    onDownload: { conflict = nil; performPull() },   // cloud wins: explicit, skip the guard
                     onUpload: { conflict = nil; forceUpload() },
                     onCancel: { conflict = nil }
                 )
                 .presentationDetents([.medium])
                 .presentationBackground(Palette.canvas)
+            }
+            .alert("Unsynced Progress",
+                   isPresented: Binding(get: { pullGuard != nil }, set: { if !$0 { pullGuard = nil } }),
+                   presenting: pullGuard) { _ in
+                Button("Sync First") { pullGuard = nil; syncThenPull() }
+                Button("Download Anyway", role: .destructive) { pullGuard = nil; performPull() }
+                Button("Cancel", role: .cancel) { pullGuard = nil }
+            } message: { prompt in
+                Text("You have \(prompt.pending) unsynced review\(prompt.pending == 1 ? "" : "s"). Downloading replaces this device's collection and will discard them.")
             }
         }
     }
@@ -443,7 +459,42 @@ struct SyncView: View {
                              detail: parts.joined(separator: " · "), time: "now")
     }
 
+    /// Download Decks entry point: guard against discarding unpushed reviews before the
+    /// full download-and-replace. Offers to Sync first.
     private func pullDecks() {
+        let pending = CollectionStore.pendingReviewCount()
+        if pending > 0 {
+            pullGuard = PullGuardPrompt(pending: pending)
+        } else {
+            performPull()
+        }
+    }
+
+    /// Runs Sync Progress, then continues with the download once local changes are safely pushed.
+    private func syncThenPull() {
+        guard let creds = auth.credentials else { return }
+        isSyncing = true
+        syncProgress = 0
+        Task {
+            do {
+                _ = try await engine.syncProgress(in: modelContext, credentials: creds) { stage in
+                    withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
+                }
+                isSyncing = false
+                performPull()
+            } catch SyncError.fullSyncRequired(let reason) {
+                isSyncing = false
+                conflict = ConflictPrompt(reason: reason)
+            } catch {
+                isSyncing = false
+                syncStageText = "Sync failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// The actual full download-and-replace. Also used by Force Download (cloud wins),
+    /// which is an explicit choice and so bypasses the pull guard.
+    private func performPull() {
         guard let creds = auth.credentials else { return }
         isPulling = true
         Task {

@@ -248,14 +248,14 @@ always works offline; sync is an explicit action.
 
 > **V2.3 complete** — real, two-way, Anki-compatible sync verified against AnkiWeb. Merged to `main`.
 
-### V2.4 — Hardening
-- [ ] **Guard Pull when local progress is unpushed:** Pull is a full download-and-replace that
-      overwrites the persisted `.anki2` and would discard un-synced reviews (`usn=-1`). Detect
-      pending changes and confirm/auto-Sync-first before replacing.
-- [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
-- [ ] Wire the currently-cosmetic **Offline Mode / Media Syncing / Prune Cache** controls, or
-      remove them if we decide media is out of scope.
-- [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
+> **Ordering note:** tests and non-urgent hardening were moved to the end (V2.8) so the feature
+> set stabilizes first; the one data-safety item (Pull guard) was pulled forward to V2.4.
+
+### V2.4 — Pull safety
+> Pull / Force-Download is a full download-and-replace: it overwrites the persisted `.anki2` and
+> would silently discard un-synced local reviews (`usn=-1`). Guard against data loss.
+- [ ] Detect unpushed local changes (pending `usn=-1` cards/revlog) before a Pull / Force-Download.
+- [ ] Confirm with the user (or auto-Sync-first) before replacing the local collection.
 
 ### V2.5 — New-card daily limits (scheduler parity)
 > Desktop caps the deck's **New** count at `deck_config.new.perDay` (default 20) and decrements
@@ -282,6 +282,13 @@ always works offline; sync is an explicit action.
 ### V2.7 — Media (audio/images)
 - [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.
 - [ ] Store media in the app sandbox; play answer audio via AVAudioPlayer (wire the speaker button).
+
+### V2.8 — Hardening & tests (last)
+> Done once the feature set has stabilized.
+- [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
+- [ ] Wire the currently-cosmetic **Offline Mode / Media Syncing / Prune Cache** controls, or
+      remove them if we decide media is out of scope.
+- [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
 
 ### Deferred / stretch (not blocking V2)
 - [ ] Media hash-based dedup.
