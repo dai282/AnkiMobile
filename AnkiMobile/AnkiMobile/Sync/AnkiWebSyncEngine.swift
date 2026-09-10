@@ -52,11 +52,14 @@ struct AnkiWebSyncEngine: SyncEngine {
 
     /// Performs the `meta` handshake, which reveals the server's usn/schema and whether
     /// the remote collection is empty — the basis for deciding what (if anything) to pull.
-    func fetchMeta(_ credentials: SyncCredentials, sessionKey: String? = nil) async throws -> ServerMeta {
+    /// Returns the parsed meta plus the endpoint that ultimately served it — AnkiWeb
+    /// redirects the first call to your account's regional shard, and the rest of the
+    /// sync must stay on that host.
+    func fetchMeta(_ credentials: SyncCredentials, sessionKey: String? = nil) async throws -> (meta: ServerMeta, host: String) {
         let body = try JSONSerialization.data(withJSONObject: ["v": syncVersion, "cv": clientVersion])
-        let (data, _) = try await send(method: "meta", host: credentials.host, hostKey: credentials.hostKey, body: body, sessionKey: sessionKey)
+        let (data, resolvedHost) = try await send(method: "meta", host: credentials.host, hostKey: credentials.hostKey, body: body, sessionKey: sessionKey)
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        return ServerMeta(
+        let meta = ServerMeta(
             modified: (object["mod"] as? NSNumber)?.intValue ?? 0,
             schema: (object["scm"] as? NSNumber)?.intValue ?? 0,
             usn: (object["usn"] as? NSNumber)?.intValue ?? 0,
@@ -64,19 +67,21 @@ struct AnkiWebSyncEngine: SyncEngine {
             shouldContinue: object["cont"] as? Bool ?? true,
             empty: object["empty"] as? Bool ?? false
         )
+        return (meta, resolvedHost)
     }
 
     // MARK: Pull / progress (built incrementally across V2.2 / V2.3)
 
     /// Full-sync download: fetches the entire collection as a `.anki2` SQLite file.
-    func downloadCollection(_ credentials: SyncCredentials) async throws -> Data {
-        let (data, _) = try await send(method: "download", host: credentials.host,
-                                       hostKey: credentials.hostKey, body: Data("{}".utf8))
+    func downloadCollection(host: String, hostKey: String, sessionKey: String) async throws -> Data {
+        let (data, _) = try await send(method: "download", host: host,
+                                       hostKey: hostKey, body: Data("{}".utf8), sessionKey: sessionKey)
         return data
     }
 
     func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
-        let meta = try await fetchMeta(credentials)
+        let skey = sessionKey()
+        let (meta, host) = try await fetchMeta(credentials, sessionKey: skey)
         if !meta.shouldContinue {
             throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
         }
@@ -84,8 +89,8 @@ struct AnkiWebSyncEngine: SyncEngine {
             return PullResult(deckName: "Server has no decks to pull yet", newCards: 0, sizeMB: 0)
         }
 
-        // First sync from our (non-Anki) local store = full download.
-        let dbBytes = try await downloadCollection(credentials)
+        // First sync from our (non-Anki) local store = full download. Stay on the host meta resolved to.
+        let dbBytes = try await downloadCollection(host: host, hostKey: credentials.hostKey, sessionKey: skey)
 
         // Persist the collection as the sync source of truth (not a temp file).
         try CollectionStore.ensureDirectory()
@@ -126,11 +131,12 @@ struct AnkiWebSyncEngine: SyncEngine {
             throw SyncError.network("No decks to sync yet — use Download Decks first.")
         }
         let skey = sessionKey()   // one stable key for the whole stateful sync
-        let host = credentials.host, hostKey = credentials.hostKey
+        let hostKey = credentials.hostKey
         let store = try AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path)
 
         onStage(SyncStage(text: "Checking server…", progress: 0.05))
-        let meta = try await fetchMeta(credentials, sessionKey: skey)
+        // Stay on whatever host meta resolved to (AnkiWeb shard) for the whole stateful sync.
+        let (meta, host) = try await fetchMeta(credentials, sessionKey: skey)
         if !meta.shouldContinue {
             throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
         }
@@ -247,9 +253,13 @@ struct AnkiWebSyncEngine: SyncEngine {
             store.close()
         }
 
+        // Resolve the account's shard first, so the (potentially large) upload body isn't
+        // sent twice through a redirect.
+        let skey = sessionKey()
+        let (_, host) = try await fetchMeta(credentials, sessionKey: skey)
         let bytes = try Data(contentsOf: CollectionStore.collectionURL)
-        let (response, _) = try await send(method: "upload", host: credentials.host,
-                                           hostKey: credentials.hostKey, body: bytes, sessionKey: sessionKey())
+        let (response, _) = try await send(method: "upload", host: host,
+                                           hostKey: credentials.hostKey, body: bytes, sessionKey: skey)
         let text = (String(data: response, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.hasPrefix("OK") else {
             throw SyncError.network(text.isEmpty ? "Upload was rejected by the server." : text)
@@ -378,11 +388,12 @@ struct AnkiWebSyncEngine: SyncEngine {
             switch http.statusCode {
             case 200:
                 return (try Zstd.decompress(data), baseHost)
-            case 301, 302, 307, 308:
+            case 301, 302, 303, 307, 308:
                 guard let location = http.value(forHTTPHeaderField: "Location"),
                       let newBase = Self.baseURLString(from: location) else {
                     throw SyncError.network("Server redirected without a valid location.")
                 }
+                print("[sync] \(http.statusCode) redirect \(baseHost) → \(newBase) (via \(location))")
                 baseHost = newBase
                 continue
             case 403:
@@ -420,7 +431,9 @@ struct AnkiWebSyncEngine: SyncEngine {
         var trimmed = host.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { trimmed = AuthController.defaultHost }
         if !trimmed.hasPrefix("http://") && !trimmed.hasPrefix("https://") {
-            trimmed = "http://" + trimmed
+            // Default to https for real servers; only local dev hosts are plain http.
+            let isLocal = trimmed.hasPrefix("localhost") || trimmed.hasPrefix("127.0.0.1")
+            trimmed = (isLocal ? "http://" : "https://") + trimmed
         }
         while trimmed.hasSuffix("/") { trimmed.removeLast() }
         return trimmed

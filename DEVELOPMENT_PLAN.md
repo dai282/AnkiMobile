@@ -236,8 +236,17 @@ always works offline; sync is an explicit action.
         Upload / Force Download** dialog. The common case still auto-merges by mtime.
   - [x] **Force Download** = full re-download (reuses Download Decks). **Force Upload** = Anki's
         full upload (`before_upload` prep → POST `/sync/upload`), making this device the cloud copy.
-- **Remaining for V2.3**
-  - [ ] Point at real AnkiWeb (currently verified only against a local sync server).
+- **V2.3f — Real AnkiWeb + polish** ✅
+  - [x] **Verified end-to-end against real AnkiWeb** (login, Download Decks, two-way Sync Progress).
+        Follow **303** redirects, and keep the whole sync on the account's resolved shard
+        (`fetchMeta` returns the host; pull/sync/upload reuse it). Default bare hosts to **https**
+        (only `localhost`/`127.0.0.1` stay http).
+  - [x] Learn-count consistency: `studyQueue` includes all learning cards (regardless of intraday
+        due), matching `queueCounts`, so the in-session pill agrees with the deck views.
+- **Known gap (→ V2.5):** the study session caps New at 20/day while the deck views show all new
+  cards, so those two disagree above 20. Fixed properly by the daily-limits work in V2.5.
+
+> **V2.3 complete** — real, two-way, Anki-compatible sync verified against AnkiWeb. Merged to `main`.
 
 ### V2.4 — Hardening
 - [ ] **Guard Pull when local progress is unpushed:** Pull is a full download-and-replace that
