@@ -34,6 +34,7 @@ final class AnkiCollectionReader {
             sqlite3_close(db)
             throw ReaderError.cannotOpen(message)
         }
+        registerAnkiCollations(on: db)
     }
 
     deinit {

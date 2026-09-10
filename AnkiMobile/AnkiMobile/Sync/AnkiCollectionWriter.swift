@@ -60,6 +60,7 @@ final class AnkiCollectionWriter {
             sqlite3_close(db)
             throw WriterError.cannotOpen(message)
         }
+        registerAnkiCollations(on: db)
     }
 
     deinit {
