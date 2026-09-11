@@ -154,7 +154,8 @@ struct AnkiWebSyncEngine: SyncEngine {
         // sync (its mod differs from ours). Only skip when both sides are even.
         let cards = try store.pendingCardArrays(usn: serverUsn)
         let revlog = try store.pendingRevlogArrays(usn: serverUsn)
-        let haveLocalChanges = !cards.isEmpty || !revlog.isEmpty
+        let pendingDecks = try store.pendingDeckArrays(usn: serverUsn)
+        let haveLocalChanges = !cards.isEmpty || !revlog.isEmpty || !pendingDecks.isEmpty
         let serverMoved = meta.modified != local.mod
         if !haveLocalChanges && !serverMoved {
             onStage(SyncStage(text: "Already up to date", progress: 1))
@@ -170,11 +171,15 @@ struct AnkiWebSyncEngine: SyncEngine {
             let graves = jsonObject(startData)
             try store.applyServerGraves(cards: intList(graves["cards"]), notes: intList(graves["notes"]), decks: intList(graves["decks"]))
 
-            // 2. applyChanges — send empty unchunked changes; reconcile the server's.
+            // 2. applyChanges — send our changed decks (per-deck new-card counters) so the
+            //    server/desktop reflect new cards studied in-app; reconcile the server's.
             onStage(SyncStage(text: "Exchanging changes…", progress: 0.3))
-            let changesBody = try JSONSerialization.data(withJSONObject: ["changes": ["models": [], "decks": [[], []], "tags": []]])
+            let changesBody = try JSONSerialization.data(withJSONObject: [
+                "changes": ["models": [], "decks": [pendingDecks, []], "tags": []]
+            ])
             let (changesData, _) = try await send(method: "applyChanges", host: host, hostKey: hostKey, body: changesBody, sessionKey: skey)
             try guardNoNewStructuralObjects(jsonObject(changesData), store: store)
+            try store.stampPushedDecks(usn: serverUsn)   // clear usn=-1 on pushed decks before sanity
 
             // 3. chunk — download server changes until done, applying each to our collection.
             onStage(SyncStage(text: "Downloading updates…", progress: 0.45))
