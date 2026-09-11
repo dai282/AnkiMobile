@@ -174,6 +174,88 @@ final class AnkiCollectionSyncStore {
         return ids
     }
 
+    // MARK: - Per-deck new counter: write (part 2) + push (part 3)
+
+    /// Increments `new_studied` by 1 for each deck (resetting to 0 first if its counter is for
+    /// a previous day), sets `last_day_studied = today`, and marks the deck dirty so it syncs.
+    /// Anki propagates a new-card study to all ancestors, so pass the studied deck + ancestors.
+    func incrementNewStudied(deckIDs: [Int], today: Int, modSeconds: Int) throws {
+        for id in deckIDs {
+            guard let blob = deckCommonBlob(id) else { continue }
+            var fields = Protobuf.fields(blob)
+            let lastDay = Int(fields.first { $0.field == 3 }?.varint ?? 0)
+            let current = lastDay == today ? (fields.first { $0.field == 4 }?.varint ?? 0) : 0
+            setVarint(&fields, field: 3, value: UInt64(today))
+            setVarint(&fields, field: 4, value: current + 1)
+            try writeDeckCommon(id: id, blob: Protobuf.serialize(fields), modSeconds: modSeconds)
+        }
+    }
+
+    /// Locally-changed decks (usn = -1) as Anki schema-11 JSON dicts for `applyChanges`.
+    func pendingDeckArrays(usn serverUsn: Int) throws -> [[String: Any]] {
+        var out: [[String: Any]] = []
+        try forEachRow("SELECT id, name, mtime_secs, common, kind FROM decks WHERE usn=-1") { stmt in
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            // Schema-18 stores deck names 0x1f-separated, but the schema-11 sync wire uses the
+            // "::" human form. Sending the raw 0x1f flattens the hierarchy on the server.
+            let nativeName = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+            let name = nativeName.replacingOccurrences(of: "\u{1f}", with: "::")
+            let mtime = Int(sqlite3_column_int64(stmt, 2))
+            let common = self.blobColumn(stmt, 3) ?? []
+            let kind = self.blobColumn(stmt, 4) ?? []
+            let cf = Protobuf.fields(common)
+            func v(_ field: Int) -> Int { Int(cf.first { $0.field == field && $0.wire == 0 }?.varint ?? 0) }
+            let day = v(3)
+            out.append([
+                "id": id, "mod": mtime, "name": name, "usn": serverUsn,
+                "collapsed": v(1) != 0, "browserCollapsed": v(2) != 0,
+                "desc": "", "dyn": 0, "conf": Protobuf.configID(fromKind: kind) ?? 1,
+                "newToday": [day, v(4)], "revToday": [day, v(5)],
+                "lrnToday": [day, v(6)], "timeToday": [day, v(7)],
+                "extendNew": 0, "extendRev": 0,
+            ])
+        }
+        return out
+    }
+
+    func stampPushedDecks(usn serverUsn: Int) throws {
+        try run("UPDATE decks SET usn=? WHERE usn=-1", [serverUsn])
+    }
+
+    private func setVarint(_ fields: inout [PBField], field: Int, value: UInt64) {
+        let updated = PBField(field: field, wire: 0, varint: value)
+        if let idx = fields.firstIndex(where: { $0.field == field }) { fields[idx] = updated }
+        else { fields.append(updated) }
+    }
+
+    private func deckCommonBlob(_ id: Int) -> [UInt8]? {
+        var result: [UInt8]?
+        try? forEachRow("SELECT common FROM decks WHERE id=?", bind: [id]) { stmt in
+            result = self.blobColumn(stmt, 0)
+        }
+        return result
+    }
+
+    private func blobColumn(_ stmt: OpaquePointer, _ column: Int32) -> [UInt8]? {
+        guard let ptr = sqlite3_column_blob(stmt, column) else { return nil }
+        let count = Int(sqlite3_column_bytes(stmt, column))
+        guard count > 0 else { return [] }
+        return [UInt8](UnsafeRawBufferPointer(start: ptr, count: count))
+    }
+
+    private func writeDeckCommon(id: Int, blob: [UInt8], modSeconds: Int) throws {
+        let sql = "UPDATE decks SET common=?, mtime_secs=?, usn=-1 WHERE id=?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
+            throw StoreError.query(lastError(sql))
+        }
+        defer { sqlite3_finalize(stmt) }
+        blob.withUnsafeBytes { sqlite3_bind_blob(stmt, 1, $0.baseAddress, Int32(blob.count), ankiSQLiteTransient) }
+        sqlite3_bind_int64(stmt, 2, Int64(modSeconds))
+        sqlite3_bind_int64(stmt, 3, Int64(id))
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw StoreError.query(lastError(sql)) }
+    }
+
     // MARK: - Remote → local (things the server sends us)
 
     /// Deletes rows the server reports as deleted. (We don't record graves of our own.)

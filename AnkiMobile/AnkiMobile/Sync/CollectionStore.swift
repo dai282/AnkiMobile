@@ -40,4 +40,22 @@ enum CollectionStore {
         guard exists, let store = try? AnkiCollectionSyncStore(path: collectionURL.path) else { return 0 }
         return (try? store.pendingReviewCount()) ?? 0
     }
+
+    /// The current Anki day index for the persisted collection (0 if none).
+    static func currentDayIndex(asOf now: Date = .now) -> Int {
+        guard exists, let reader = try? AnkiCollectionReader(path: collectionURL.path) else { return 0 }
+        return reader.currentDayIndex(now: now)
+    }
+
+    /// New cards studied today per deck (Anki id → count), read from Anki's own per-deck
+    /// counter in the collection. This is the source of truth Anki uses for the New limit,
+    /// so it matches desktop exactly. Counters whose day isn't today resolve to 0.
+    static func newStudiedTodayByDeck(asOf now: Date = .now) -> [Int: Int] {
+        guard exists, let reader = try? AnkiCollectionReader(path: collectionURL.path) else { return [:] }
+        let today = reader.currentDayIndex(now: now)
+        let raw = (try? reader.deckDailyNewStudied()) ?? [:]
+        let resolved = raw.mapValues { $0.lastDay == today ? $0.newStudied : 0 }
+        print("[limits] dayIndex=\(today) raw=\(raw) resolved=\(resolved)")
+        return resolved
+    }
 }

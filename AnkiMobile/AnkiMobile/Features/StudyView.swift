@@ -62,7 +62,7 @@ struct StudyView: View {
         }
         .onAppear {
             guard !started else { return }
-            queue = deck.studyQueue(mode: mode)
+            queue = deck.studyQueue(mode: mode, newStudiedByDeck: CollectionStore.newStudiedTodayByDeck())
             startedWithCards = !queue.isEmpty
             started = true
             cardShownAt = .now
@@ -269,6 +269,12 @@ struct StudyView: View {
         mirrorReview(card: card, rating: rating, stateBefore: stateBefore,
                      intervalBefore: intervalBefore, reviewedAt: reviewedAt, timeMs: elapsedMs)
 
+        // Answering a new card counts against today's new-card limit — bump Anki's per-deck
+        // counter (this deck + ancestors, as Anki does) so the New count decrements and syncs.
+        if stateBefore == .new, let deck = card.deck {
+            incrementNewStudied(for: deck, at: reviewedAt)
+        }
+
         // Cards still in learning reappear later in the same session.
         if card.state == .learning {
             queue.append(card)
@@ -322,6 +328,27 @@ struct StudyView: View {
             try writer.record(review)
         } catch {
             print("[mirror] failed to record review for card \(cardId): \(error.localizedDescription)")
+        }
+    }
+
+    /// Bumps the per-deck `new_studied` counter for the card's deck and all its ancestors,
+    /// mirroring how Anki tracks the daily new-card limit (and marking them dirty for sync).
+    private func incrementNewStudied(for deck: Deck, at now: Date) {
+        guard CollectionStore.exists else { return }
+        var ids: [Int] = []
+        var node: Deck? = deck
+        while let current = node {
+            if let ankiID = current.ankiDeckId { ids.append(ankiID) }
+            node = current.parent
+        }
+        guard !ids.isEmpty else { return }
+        do {
+            let store = try AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path)
+            try store.incrementNewStudied(deckIDs: ids,
+                                          today: CollectionStore.currentDayIndex(asOf: now),
+                                          modSeconds: Int(now.timeIntervalSince1970))
+        } catch {
+            print("[limits] increment new_studied failed: \(error.localizedDescription)")
         }
     }
 

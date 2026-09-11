@@ -25,10 +25,19 @@ struct DecksView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    /// New cards studied today per deck (Anki's own counter), reactive to card changes via
+    /// `allCards`. Drives the daily new-card limit across the deck rows + aggregate.
+    private var newStudiedByDeck: [Int: Int] {
+        _ = allCards
+        return CollectionStore.newStudiedTodayByDeck()
+    }
+
     /// Daily queue only reflects cards you can actually study (from downloaded decks).
-    /// Computed from the cards query so it stays reactive to rating changes.
-    private var aggregate: QueueCounts {
-        allCards.filter { $0.deck?.isEffectivelyDownloaded == true }.queueCounts()
+    /// Summed per top-level deck so each deck's daily new-card limit is applied before totalling.
+    private func aggregate(_ newStudied: [Int: Int]) -> QueueCounts {
+        topLevelDecks
+            .filter { $0.isDownloaded }
+            .reduce(QueueCounts()) { $0 + $1.counts(newStudiedByDeck: newStudied) }
     }
 
     private var filteredDecks: [Deck] {
@@ -41,12 +50,13 @@ struct DecksView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        let newStudied = newStudiedByDeck
+        return NavigationStack {
             ScrollView {
                 VStack(spacing: Metrics.spaceMd) {
                     searchRow
-                    DailyQueueCard(counts: aggregate)
-                    decksSection
+                    DailyQueueCard(counts: aggregate(newStudied))
+                    decksSection(newStudied)
                     syncBanner
                 }
                 .padding(.horizontal, Metrics.screenMargin)
@@ -125,7 +135,7 @@ struct DecksView: View {
 
     // MARK: Deck list
 
-    private var decksSection: some View {
+    private func decksSection(_ newStudied: [Int: Int]) -> some View {
         VStack(alignment: .leading, spacing: Metrics.spaceSm) {
             SectionHeader(title: "Decks Available")
             if filteredDecks.isEmpty {
@@ -135,12 +145,13 @@ struct DecksView: View {
                     ForEach(filteredDecks) { deck in
                         if deck.subdecks.isEmpty {
                             NavigationLink(value: deck) {
-                                DeckRow(deck: deck)
+                                DeckRow(deck: deck, newStudied: newStudied)
                             }
                             .buttonStyle(.plain)
                         } else {
                             ExpandableDeckRow(
                                 deck: deck,
+                                newStudied: newStudied,
                                 isExpanded: expandedDeckIDs.contains(deck.id),
                                 onToggle: { toggle(deck) }
                             )
@@ -262,6 +273,7 @@ private struct DailyQueueCard: View {
 
 private struct DeckRow: View {
     let deck: Deck
+    let newStudied: [Int: Int]
 
     var body: some View {
         HStack(spacing: Metrics.spaceSm) {
@@ -280,7 +292,7 @@ private struct DeckRow: View {
                 StoragePill(deck: deck)
             }
             Spacer(minLength: Metrics.spaceXs)
-            CountPills(counts: deck.counts())
+            CountPills(counts: deck.counts(newStudiedByDeck: newStudied))
         }
         .padding(Metrics.spaceSm)
         .frame(minHeight: 64)
@@ -306,6 +318,7 @@ private struct DeckRow: View {
 
 private struct ExpandableDeckRow: View {
     let deck: Deck
+    let newStudied: [Int: Int]
     let isExpanded: Bool
     let onToggle: () -> Void
 
@@ -338,7 +351,7 @@ private struct ExpandableDeckRow: View {
                             StoragePill(deck: deck)
                         }
                         Spacer(minLength: Metrics.spaceXs)
-                        CountPills(counts: deck.counts())
+                        CountPills(counts: deck.counts(newStudiedByDeck: newStudied))
                     }
                     .contentShape(Rectangle())
                 }
@@ -350,7 +363,7 @@ private struct ExpandableDeckRow: View {
                 VStack(spacing: 0) {
                     ForEach(deck.subdecks.sorted { $0.sortOrder < $1.sortOrder }) { sub in
                         NavigationLink(value: sub) {
-                            SubdeckRow(deck: sub)
+                            SubdeckRow(deck: sub, newStudied: newStudied)
                         }
                         .buttonStyle(.plain)
                     }
@@ -369,6 +382,7 @@ private struct ExpandableDeckRow: View {
 
 private struct SubdeckRow: View {
     let deck: Deck
+    let newStudied: [Int: Int]
 
     var body: some View {
         HStack(spacing: Metrics.spaceSm) {
@@ -380,7 +394,7 @@ private struct SubdeckRow: View {
                 .font(AppFont.bodySm)
                 .foregroundStyle(Palette.textPrimary)
             Spacer(minLength: Metrics.spaceXs)
-            CountPills(counts: deck.counts(), compact: true)
+            CountPills(counts: deck.counts(newStudiedByDeck: newStudied), compact: true)
         }
         .padding(.horizontal, Metrics.spaceMd)
         .padding(.vertical, Metrics.spaceSm)
