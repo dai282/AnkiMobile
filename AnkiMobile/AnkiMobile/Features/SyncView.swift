@@ -40,6 +40,8 @@ struct SyncView: View {
     @State private var isPulling = false
     @State private var conflict: ConflictPrompt?
     @State private var pullGuard: PullGuardPrompt?
+    @State private var status: SyncStatus?
+    @State private var checkingStatus = false
     @State private var syncProgress: Double = 0
     @State private var syncStageText = ""
     @State private var lastSync = "Today at 09:37"
@@ -70,6 +72,7 @@ struct SyncView: View {
                 VStack(spacing: Metrics.spaceMd) {
                     if auth.isLoggedIn {
                         profileCard
+                        statusCard
                         cloudActions
                         storageCard
                         activityCard
@@ -83,6 +86,7 @@ struct SyncView: View {
             }
             .background(Palette.canvas.ignoresSafeArea())
             .navigationTitle("Sync & Account")
+            .task(id: auth.isLoggedIn) { await refreshStatus() }
             .sheet(item: $conflict) { prompt in
                 ConflictSheet(
                     reason: prompt.reason,
@@ -208,6 +212,83 @@ struct SyncView: View {
             }
         }
         .surfaceCard(cornerRadius: Metrics.radiusCard)
+    }
+
+    // MARK: Sync status (ahead / behind indicator)
+
+    private var statusCard: some View {
+        HStack(spacing: Metrics.spaceSm) {
+            Image(systemName: statusIcon)
+                .font(.system(size: 18))
+                .foregroundStyle(statusColor)
+                .frame(width: 34, height: 34)
+                .background(statusColor.opacity(0.15), in: RoundedRectangle(cornerRadius: Metrics.radiusSmall, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(statusTitle)
+                    .font(AppFont.labelMd)
+                    .foregroundStyle(Palette.textPrimary)
+                Text(statusDetail)
+                    .font(AppFont.bodySm)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if checkingStatus {
+                ProgressView().controlSize(.small)
+            } else {
+                Button { Task { await refreshStatus() } } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Palette.textMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Refresh sync status")
+            }
+        }
+        .padding(Metrics.spaceSm)
+        .frame(maxWidth: .infinity)
+        .background(statusColor.opacity(0.08), in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                .strokeBorder(statusColor.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private var statusColor: Color {
+        guard let status else { return Palette.textMuted }
+        if !status.reachable { return Palette.textMuted }
+        if status.localPending > 0 { return Palette.primary }
+        if status.serverAhead { return Palette.warning }
+        return Palette.success
+    }
+
+    private var statusIcon: String {
+        guard let status, status.reachable else { return "icloud.slash" }
+        if status.localPending > 0 { return "arrow.up.circle.fill" }
+        if status.serverAhead { return "arrow.down.circle.fill" }
+        return "checkmark.icloud.fill"
+    }
+
+    private var statusTitle: String {
+        guard let status else { return checkingStatus ? "Checking…" : "Sync status" }
+        if !status.reachable { return "Can't reach the server" }
+        if status.localPending > 0 { return "\(status.localPending) review\(status.localPending == 1 ? "" : "s") to push" }
+        if status.serverAhead { return "Cloud has new changes" }
+        return "Up to date"
+    }
+
+    private var statusDetail: String {
+        guard let status else { return "" }
+        if !status.reachable { return "Showing local state only." }
+        if status.localPending > 0 { return "Tap Sync Progress to push your reviews." }
+        if status.serverAhead { return "Tap Sync Progress to pull the latest." }
+        return "Local and cloud are in sync."
+    }
+
+    private func refreshStatus() async {
+        guard auth.isLoggedIn, let creds = auth.credentials else { status = nil; return }
+        checkingStatus = true
+        defer { checkingStatus = false }
+        status = await engine.checkStatus(in: modelContext, credentials: creds)
     }
 
     // MARK: Cloud actions (the two things v1 does)
@@ -417,6 +498,7 @@ struct SyncView: View {
                 lastSync = "Just now"
                 let entry = syncActivityEntry(pushed: summary.reviewsSynced, pulled: summary.reviewsPulled)
                 activity.insert(entry, at: 0)
+                await refreshStatus()
             } catch SyncError.fullSyncRequired(let reason) {
                 conflict = ConflictPrompt(reason: reason)
             } catch {
@@ -440,6 +522,7 @@ struct SyncView: View {
                                   detail: "This device's collection is now the cloud copy.", time: "now"),
                     at: 0
                 )
+                await refreshStatus()
             } catch {
                 syncStageText = "Upload failed: \(error.localizedDescription)"
             }
@@ -510,6 +593,7 @@ struct SyncView: View {
                                   time: "now"),
                     at: 0
                 )
+                await refreshStatus()
             } catch {
                 activity.insert(
                     ActivityEntry(kind: .deck, title: "Pull failed",

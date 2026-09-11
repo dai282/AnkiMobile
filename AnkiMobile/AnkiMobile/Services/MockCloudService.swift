@@ -51,6 +51,13 @@ struct MockSyncEngine: SyncEngine {
         // The mock has no server; treat force-upload as a successful no-op.
     }
 
+    func checkStatus(in context: ModelContext, credentials: SyncCredentials) async -> SyncStatus {
+        let pending = (try? context.fetchCount(
+            FetchDescriptor<ReviewLog>(predicate: #Predicate { $0.usn == -1 })
+        )) ?? 0
+        return SyncStatus(localPending: pending, serverAhead: false, reachable: true, hasCollection: true)
+    }
+
     @discardableResult
     func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
         try? await Task.sleep(for: .milliseconds(900))

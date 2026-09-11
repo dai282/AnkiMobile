@@ -284,18 +284,18 @@ always works offline; sync is an explicit action.
     (`newToday:[day,count]`, etc.) and sends them, then stamps their usn — so desktop's counter
     matches ours. (Minimal protobuf read/write lives in `AnkiSQLite.Protobuf`.)
 
-### V2.6 — Enhancements & Sync UX
-> Make the push/pull asymmetry legible instead of guesswork. Today "Sync Progress" is push-only
-> and "Pull Decks" is a full download; the user can't tell when they're ahead of / behind the cloud.
-- [ ] **Ahead/behind indicators (two):** one for *progress* (do we have local reviews to push?
-      are there server reviews to pull?) and one for *deck state* (does the server have card/deck
-      changes we don't?). Drive them off the `meta` handshake (server `usn`/`mod`) vs our anchor.
-- [ ] **"Sync before Pull" prompt:** when local progress differs from the cloud, clicking Pull
-      Decks asks to Sync first (ties into the V2.4 guard).
-- [ ] Honest Sync messaging when the **server is ahead**: "Up to date locally — Pull to get N
-      changes" instead of a flat "Already up to date".
-- [ ] (Stretch) Two-way reconcile on Sync: apply downloaded server changes to the SwiftData
-      projection too, so Sync can pull progress without a full re-download.
+### V2.6 — Enhancements & Sync UX ✅ (core)
+> Make the push/pull asymmetry legible instead of guesswork.
+- [x] **Ahead/behind indicator** on the Sync tab: a status card driven by `SyncEngine.checkStatus`
+      (a `meta` check vs our `SyncState` anchor). Shows "N reviews to push" (ahead), "Cloud has new
+      changes" (behind, `meta.usn > anchor`), "Up to date", or "Can't reach the server" — with a
+      manual refresh, and auto-refresh on appear and after each sync/pull/upload.
+- [x] **"Sync before Pull" prompt** — delivered in V2.4 (guards Download against unpushed reviews).
+- [x] Honest messaging when the server is ahead (the indicator says "Cloud has new changes — tap
+      Sync Progress") instead of a flat "Already up to date".
+- [x] Two-way reconcile on Sync — delivered in V2.3d (Sync pulls server changes, no full download).
+- [ ] (Deferred) Split the single indicator into *progress* vs *deck-structure* signals, and mirror
+      it on the Decks tab. The current combined indicator covers the common case.
 
 ### V2.7 — Media (audio/images)
 - [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.

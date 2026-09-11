@@ -282,6 +282,30 @@ struct AnkiWebSyncEngine: SyncEngine {
         print("[upload] forced full upload OK; anchor usn=\(meta.usn) mod=\(meta.mod) scm=\(meta.scm)")
     }
 
+    /// Read-only ahead/behind check: local unsynced reviews vs whether the server has moved
+    /// past our recorded anchor. Best-effort — never throws.
+    func checkStatus(in context: ModelContext, credentials: SyncCredentials) async -> SyncStatus {
+        var status = SyncStatus()
+        status.hasCollection = CollectionStore.exists
+        status.localPending = CollectionStore.pendingReviewCount()
+        guard status.hasCollection, let store = try? AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path) else {
+            return status
+        }
+        let localMod = (try? store.collectionMeta().mod) ?? 0
+
+        do {
+            let (meta, _) = try await fetchMeta(credentials, sessionKey: sessionKey())
+            status.reachable = true
+            // Use the SAME signal syncProgress gates on (meta.mod vs the persisted col.mod), so
+            // "behind" always corresponds to a sync that will actually run and then clear it.
+            // With nothing pending locally, a differing server mod means the cloud is ahead.
+            status.serverAhead = status.localPending == 0 && meta.modified != localMod
+        } catch {
+            status.reachable = false
+        }
+        return status
+    }
+
     /// Sends our pending cards + revlog in `applyChunk` requests, always finishing with a
     /// `done: true` chunk (Anki sends one even when there is nothing to upload).
     private func uploadChunks(cards: [[Any]], revlog: [[Any]], host: String, hostKey: String, sessionKey: String) async throws {

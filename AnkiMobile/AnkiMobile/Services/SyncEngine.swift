@@ -55,6 +55,20 @@ struct PullResult {
     let sizeMB: Double
 }
 
+/// A lightweight snapshot of how local and cloud state compare, for the ahead/behind indicator.
+struct SyncStatus {
+    /// Local reviews recorded but not yet pushed ("ahead" of the cloud).
+    var localPending: Int = 0
+    /// The server has changes we haven't pulled ("behind" the cloud).
+    var serverAhead: Bool = false
+    /// Whether the server could be reached for the check.
+    var reachable: Bool = false
+    /// No collection has been pulled yet.
+    var hasCollection: Bool = false
+
+    var inSync: Bool { reachable && localPending == 0 && !serverAhead }
+}
+
 /// Credentials obtained after a successful login (Anki's `hostKey` + chosen endpoint).
 struct SyncCredentials: Equatable {
     let username: String
@@ -80,4 +94,8 @@ protocol SyncEngine {
     /// Conflict resolution: replace the *server's* collection with our local one
     /// (Anki's full upload). The counterpart "force download" is just `pullDecks`.
     func forceUpload(in context: ModelContext, credentials: SyncCredentials) async throws
+
+    /// A read-only comparison of local vs cloud state for the ahead/behind indicator.
+    /// Never throws — an unreachable server is reported via `reachable = false`.
+    func checkStatus(in context: ModelContext, credentials: SyncCredentials) async -> SyncStatus
 }
