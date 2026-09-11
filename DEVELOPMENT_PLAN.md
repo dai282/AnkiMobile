@@ -257,14 +257,32 @@ always works offline; sync is an explicit action.
 - [ ] Detect unpushed local changes (pending `usn=-1` cards/revlog) before a Pull / Force-Download.
 - [ ] Confirm with the user (or auto-Sync-first) before replacing the local collection.
 
-### V2.5 — New-card daily limits (scheduler parity)
+### V2.5 — New-card daily limits (scheduler parity) ✅
 > Desktop caps the deck's **New** count at `deck_config.new.perDay` (default 20) and decrements
-> it as new cards are introduced each day. We currently show *every* `.new` card (e.g. 101),
-> so the counts diverge from desktop. This needs real per-day state, not a naive cap.
-- [ ] Read each deck's `deck_config` `new.perDay` (and `rev.perDay`) from the pulled collection.
-- [ ] Track "new introduced today" per deck (day cutoff via `col.crt` / rollover) so the New
-      count decrements as you study, matching Anki.
-- [ ] Apply the limit to the Decks/DeckDetail counts and the study queue consistently.
+> it as new cards are introduced each day. We used to show *every* `.new` card, diverging from
+> desktop and from our own study session (which caps at 20).
+- [x] **Real per-deck limit:** parse each deck's `new.perDay` from the collection — `decks.kind`
+      protobuf (`KindContainer.Normal.config_id`) → `deck_config.config` protobuf (`new_per_day`,
+      field 9), via a minimal varint scanner in `AnkiCollectionReader`. Stored on `Deck.newPerDay`
+      at import (lightweight SwiftData migration, defaults to 20). So a 99/day preset shows 99.
+- [x] **Anki-correct summation:** Learning/Review sum over the whole subtree, but **New does not
+      add up** — a parent's New is capped by the *parent's* own daily limit (children keep their
+      own), matching desktop Anki.
+- [x] **New-studied-today = Anki's own per-deck counter, not the revlog.** Anki stores
+      `Deck.Common.new_studied` (+ `last_day_studied`) in the deck protobuf and syncs it; it's
+      NOT recomputed from the revlog. We read the same counter so the numbers match desktop
+      exactly. Three parts:
+  - **(1) Read** — parse `new_studied`/`last_day_studied` from each deck's `common` blob; resolve
+    against the current Anki day index (`AnkiCollectionReader.currentDayIndex`, computed from
+    `crt` + `config.rollover` + `config.localOffset`, independent of the device timezone). A
+    deck's OWN counter already includes its subtree (Anki propagates studies to ancestors), so we
+    read it directly rather than summing (summing double-counted the parent).
+  - **(2) Increment** — answering a new card in-app bumps `new_studied` (+ sets `last_day_studied`)
+    in the `.anki2` for the card's deck **and all ancestors**, marking them `usn=-1`. New
+    decrements live as you study on the phone.
+  - **(3) Push** — the sync's `applyChanges` now serializes changed decks as Anki schema-11 JSON
+    (`newToday:[day,count]`, etc.) and sends them, then stamps their usn — so desktop's counter
+    matches ours. (Minimal protobuf read/write lives in `AnkiSQLite.Protobuf`.)
 
 ### V2.6 — Enhancements & Sync UX
 > Make the push/pull asymmetry legible instead of guesswork. Today "Sync Progress" is push-only

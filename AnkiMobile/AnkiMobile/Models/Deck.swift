@@ -23,6 +23,11 @@ final class Deck {
     var sizeMB: Double
     var lastStudied: Date?
 
+    /// New cards allowed per day for this deck (Anki's `deck_config.new.perDay`). Populated
+    /// from the pulled collection; defaults to Anki's default. Declaration default keeps
+    /// SwiftData's lightweight migration happy.
+    var newPerDay: Int = 20
+
     var sortOrder: Int
     var createdAt: Date
 
@@ -83,7 +88,12 @@ struct QueueCounts {
     var learning = 0
     var review = 0
     var total: Int { new + learning + review }
+
+    static func + (lhs: QueueCounts, rhs: QueueCounts) -> QueueCounts {
+        QueueCounts(new: lhs.new + rhs.new, learning: lhs.learning + rhs.learning, review: lhs.review + rhs.review)
+    }
 }
+
 
 enum StudyMode {
     case all
@@ -141,14 +151,32 @@ extension Deck {
         return ids
     }
 
-    /// Counts of due/new cards across this deck and its subdecks.
-    func counts(asOf now: Date = .now) -> QueueCounts {
-        allCards.queueCounts(asOf: now)
+    /// New cards already introduced today for this deck, from Anki's own per-deck counter
+    /// (`newStudiedByDeck`: Anki deck id → new_studied today). Anki propagates each new-card
+    /// study up to all ancestor decks, so a deck's OWN counter already includes its subtree —
+    /// we read it directly rather than summing (summing would double-count the parent).
+    func newStudiedToday(_ newStudiedByDeck: [Int: Int]) -> Int {
+        ankiDeckId.flatMap { newStudiedByDeck[$0] } ?? 0
     }
 
-    /// Builds the ordered list of cards to study for a given mode.
-    /// Only downloaded cards are included.
-    func studyQueue(mode: StudyMode = .all, asOf now: Date = .now, newLimit: Int = 20) -> [Card] {
+    /// New cards this deck may still introduce today: `newPerDay` minus new studied today.
+    /// The limit applies to the deck's whole subtree using the deck's own limit — so New does
+    /// NOT sum up the tree (a parent is capped by the parent's limit; children keep their own).
+    func newRemainingToday(newStudiedByDeck: [Int: Int]) -> Int {
+        max(0, newPerDay - newStudiedToday(newStudiedByDeck))
+    }
+
+    /// Counts across this deck and its subdecks. Learning/Review sum over the whole subtree;
+    /// New is capped by this deck's daily limit (matching Anki — New doesn't add up).
+    func counts(asOf now: Date = .now, newStudiedByDeck: [Int: Int] = [:]) -> QueueCounts {
+        var result = allCards.queueCounts(asOf: now)
+        result.new = min(result.new, newRemainingToday(newStudiedByDeck: newStudiedByDeck))
+        return result
+    }
+
+    /// Builds the ordered list of cards to study for a given mode. Only downloaded cards are
+    /// included; new cards respect each deck node's daily limit (via `logs`).
+    func studyQueue(mode: StudyMode = .all, asOf now: Date = .now, newStudiedByDeck: [Int: Int] = [:]) -> [Card] {
         let cards = studyableCards
         // Include all learning cards regardless of their intraday due time, so the queue
         // matches how learning is counted in the deck views (queueCounts ignores due for
@@ -157,7 +185,7 @@ extension Deck {
             .sorted { $0.due < $1.due }
         let review = cards.filter { $0.state == .review && $0.due <= now }
             .sorted { $0.due < $1.due }
-        let new = Array(cards.filter { $0.state == .new }.prefix(newLimit))
+        let new = Array(cards.filter { $0.state == .new }.prefix(newRemainingToday(newStudiedByDeck: newStudiedByDeck)))
 
         switch mode {
         case .all: return learning + review + new

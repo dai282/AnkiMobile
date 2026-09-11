@@ -43,6 +43,14 @@ struct CollectionImporter {
         let cardRows = try reader.cardRows()
         let usedDeckIDs = Set(cardRows.map(\.did))
 
+        // Per-deck new-cards/day limit: deck → config id → new.perDay (protobuf-parsed).
+        let configByDeck = (try? reader.deckConfigIDs()) ?? [:]
+        let perDayByConfig = (try? reader.deckConfigNewPerDay()) ?? [:]
+        func newPerDay(forDeck id: Int) -> Int {
+            let configID = configByDeck[id] ?? 1   // 1 = Anki's default config
+            return perDayByConfig[configID] ?? 20
+        }
+
         // Decks — create shorter paths first so parents exist before their children.
         let deckRows = try reader.decks()
             .filter { !$0.name.isEmpty }
@@ -62,6 +70,7 @@ struct CollectionImporter {
             )
             deck.ankiDeckId = row.id
             deck.usn = 0
+            deck.newPerDay = newPerDay(forDeck: row.id)
             if let parent = parentName(of: row.name), let parentDeck = deckByNativeName[parent] {
                 deck.parent = parentDeck
             }

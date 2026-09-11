@@ -109,6 +109,139 @@ final class AnkiCollectionReader {
         return out
     }
 
+    // MARK: - Deck config (new cards/day)
+
+    /// Maps each deck id → its config id, parsed from the `decks.kind` protobuf blob
+    /// (`KindContainer.Normal.config_id`, both field 1). Filtered decks have no config id.
+    func deckConfigIDs() throws -> [Int: Int] {
+        var map: [Int: Int] = [:]
+        try forEachRow("SELECT id, kind FROM decks") { stmt in
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            if let bytes = blob(stmt, 1), let cid = Self.configID(fromKindBlob: bytes) {
+                map[id] = cid
+            }
+        }
+        return map
+    }
+
+    /// Maps each deck-config id → its `new.perDay`, parsed from the `deck_config.config`
+    /// protobuf blob (`DeckConfig.Config.new_per_day`, field 9).
+    func deckConfigNewPerDay() throws -> [Int: Int] {
+        var map: [Int: Int] = [:]
+        try forEachRow("SELECT id, config FROM deck_config") { stmt in
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            if let bytes = blob(stmt, 1), let perDay = Self.varintField(9, in: bytes) {
+                map[id] = Int(perDay)
+            }
+        }
+        return map
+    }
+
+    // MARK: - Per-deck daily new counter (Anki's source of truth for the New limit)
+
+    /// Each deck id → (lastDayStudied, newStudied) parsed from the `decks.common` protobuf
+    /// (`DeckCommon.last_day_studied` field 3, `new_studied` field 4). This is what Anki uses
+    /// to decrement the New count — NOT the revlog.
+    func deckDailyNewStudied() throws -> [Int: (lastDay: Int, newStudied: Int)] {
+        var map: [Int: (Int, Int)] = [:]
+        try forEachRow("SELECT id, common FROM decks") { stmt in
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            if let bytes = blob(stmt, 1) {
+                let lastDay = Int(Self.varintField(3, in: bytes) ?? 0)
+                let newStudied = Int(Self.varintField(4, in: bytes) ?? 0)
+                map[id] = (lastDay, newStudied)
+            }
+        }
+        return map
+    }
+
+    /// An integer value from the `config` table (values are stored as JSON, e.g. `4`, `-720`).
+    func configInt(_ key: String) -> Int? {
+        var value: Int?
+        try? forEachRow("SELECT val FROM config WHERE key = '\(key)'", stopAfterFirst: true) { stmt in
+            if let text = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }) {
+                value = Int(text.trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return value
+    }
+
+    /// The current Anki day index (`days_elapsed`) — number of rollovers since collection
+    /// creation. Uses the collection's own stored UTC offset and rollover hour (NOT the
+    /// device timezone, so it matches desktop even if the simulator's zone is different).
+    /// Day boundaries fall at `rolloverHour` local time; shifting timestamps so those land on
+    /// 86 400-second multiples turns the calc into a simple day-number difference.
+    func currentDayIndex(now: Date = .now) -> Int {
+        let crt = (try? creationEpoch()) ?? 0
+        let rolloverHour = configInt("rollover") ?? 4
+        // Minutes WEST of UTC. Prefer the current local offset; fall back to creation offset.
+        let offsetMinutesWest = configInt("localOffset") ?? configInt("creationOffset") ?? 0
+        let shift = (-offsetMinutesWest * 60) - (rolloverHour * 3600)
+        let dayNumber: (Int) -> Int = { secs in Int(floor(Double(secs + shift) / 86_400.0)) }
+        return max(0, dayNumber(Int(now.timeIntervalSince1970)) - dayNumber(crt))
+    }
+
+    private func blob(_ stmt: OpaquePointer, _ column: Int32) -> [UInt8]? {
+        guard let ptr = sqlite3_column_blob(stmt, column) else { return nil }
+        let count = Int(sqlite3_column_bytes(stmt, column))
+        guard count > 0 else { return nil }
+        return [UInt8](UnsafeRawBufferPointer(start: ptr, count: count))
+    }
+
+    // MARK: - Minimal protobuf scanning (just enough for the two fields above)
+
+    private static func readVarint(_ bytes: [UInt8], _ i: inout Int) -> UInt64 {
+        var result: UInt64 = 0, shift: UInt64 = 0
+        while i < bytes.count {
+            let b = bytes[i]; i += 1
+            result |= UInt64(b & 0x7F) << shift
+            if b & 0x80 == 0 { break }
+            shift += 7
+        }
+        return result
+    }
+
+    /// Advances `i` past a field's value given its wire type (0=varint,1=64-bit,2=len,5=32-bit).
+    private static func skip(wire: Int, _ bytes: [UInt8], _ i: inout Int) {
+        switch wire {
+        case 0: _ = readVarint(bytes, &i)
+        case 1: i += 8
+        case 5: i += 4
+        case 2: let len = Int(readVarint(bytes, &i)); i += len
+        default: i = bytes.count
+        }
+    }
+
+    /// Returns the varint value of a top-level field number, or nil if absent.
+    private static func varintField(_ field: Int, in bytes: [UInt8]) -> UInt64? {
+        var i = 0
+        while i < bytes.count {
+            let tag = readVarint(bytes, &i)
+            let f = Int(tag >> 3), wire = Int(tag & 7)
+            if f == field && wire == 0 { return readVarint(bytes, &i) }
+            skip(wire: wire, bytes, &i)
+        }
+        return nil
+    }
+
+    /// Extracts `Normal.config_id` (field 1 varint) from the `KindContainer` blob, where
+    /// `Normal` is submessage field 1.
+    private static func configID(fromKindBlob bytes: [UInt8]) -> Int? {
+        var i = 0
+        while i < bytes.count {
+            let tag = readVarint(bytes, &i)
+            let f = Int(tag >> 3), wire = Int(tag & 7)
+            if f == 1 && wire == 2 {                       // Normal submessage
+                let len = Int(readVarint(bytes, &i))
+                guard i + len <= bytes.count else { return nil }
+                let sub = Array(bytes[i..<i + len])
+                return varintField(1, in: sub).map(Int.init)   // config_id
+            }
+            skip(wire: wire, bytes, &i)
+        }
+        return nil
+    }
+
     /// A single text value, or nil.
     func scalarText(_ sql: String) throws -> String? {
         var value: String?

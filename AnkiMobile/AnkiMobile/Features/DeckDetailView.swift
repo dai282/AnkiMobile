@@ -21,8 +21,10 @@ struct DeckDetailView: View {
     @State private var isDownloading = false
 
     private var counts: QueueCounts {
-        let ids = deck.subtreeIDs
-        return allCards.filter { card in card.deck.map { ids.contains($0.id) } ?? false }.queueCounts()
+        // allCards is observed only to keep this reactive to rating changes; the actual
+        // subtree counting + daily new-limit lives in Deck.counts(introducedToday:).
+        _ = allCards
+        return deck.counts(newStudiedByDeck: CollectionStore.newStudiedTodayByDeck())
     }
 
     /// Rough session-length estimate (~0.4 min per due card).
