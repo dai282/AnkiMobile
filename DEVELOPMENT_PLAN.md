@@ -326,10 +326,12 @@ always works offline; sync is an explicit action.
   - [x] Speaker button lights up only when a referenced media file is actually present (dims after Prune).
   - [x] Guard Deck Detail / Study against a deck deleted by a re-import (Download Decks purges +
         re-inserts) — pop to the fresh list instead of a fatal SwiftData fault.
-- **V2.8b — Tests** ⬜ (needs a Unit Testing Bundle target added in Xcode)
-  - [ ] Scheduler round-trip (new → learning → review; lapse; graduate).
-  - [ ] `MediaZip` stored-zip extraction; `AnkiSQLite.Protobuf` read/write round-trip.
-  - [ ] `AnkiSchema` field join/split, ease↔factor, type/queue mapping; queue-count bucketing.
+- **V2.8b — Tests** ✅ (Swift Testing; `AnkiMobileTests` target — 17 tests, all passing)
+  - [x] Scheduler: new→learning, new→review (easy), lapse, last-step graduation, interval growth,
+        4-rating preview.
+  - [x] `MediaZip` stored-zip extraction + `chunked`; `AnkiSQLite.Protobuf` varint/length-delimited
+        round-trip + nested `config_id` parse.
+  - [x] `AnkiSchema` field join/split, ease↔factor, type/queue mapping; queue-count bucketing + sum.
 - **Deferred:** background/last-sync bookkeeping; retry + offline queueing of pending reviews
   (not needed for the current explicit-sync model).
 

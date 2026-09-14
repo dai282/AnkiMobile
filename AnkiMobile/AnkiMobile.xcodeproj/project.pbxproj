@@ -10,7 +10,18 @@
 		233A7057304EC9A900FA0EA2 /* libzstd in Frameworks */ = {isa = PBXBuildFile; productRef = 233A7056304EC9A900FA0EA2 /* libzstd */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		233A70B73057FB2500FA0EA2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2376F33A304D123600164F64 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2376F341304D123600164F64;
+			remoteInfo = AnkiMobile;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		233A70B33057FB2500FA0EA2 /* AnkiMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AnkiMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2376F342304D123600164F64 /* AnkiMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AnkiMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -25,6 +36,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		233A70B43057FB2500FA0EA2 /* AnkiMobileTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AnkiMobileTests;
+			sourceTree = "<group>";
+		};
 		2376F344304D123600164F64 /* AnkiMobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -36,6 +52,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		233A70B03057FB2500FA0EA2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2376F33F304D123600164F64 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -51,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				2376F344304D123600164F64 /* AnkiMobile */,
+				233A70B43057FB2500FA0EA2 /* AnkiMobileTests */,
 				2376F343304D123600164F64 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -59,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				2376F342304D123600164F64 /* AnkiMobile.app */,
+				233A70B33057FB2500FA0EA2 /* AnkiMobileTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -66,6 +91,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		233A70B23057FB2500FA0EA2 /* AnkiMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 233A70B93057FB2500FA0EA2 /* Build configuration list for PBXNativeTarget "AnkiMobileTests" */;
+			buildPhases = (
+				233A70AF3057FB2500FA0EA2 /* Sources */,
+				233A70B03057FB2500FA0EA2 /* Frameworks */,
+				233A70B13057FB2500FA0EA2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				233A70B83057FB2500FA0EA2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				233A70B43057FB2500FA0EA2 /* AnkiMobileTests */,
+			);
+			name = AnkiMobileTests;
+			packageProductDependencies = (
+			);
+			productName = AnkiMobileTests;
+			productReference = 233A70B33057FB2500FA0EA2 /* AnkiMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		2376F341304D123600164F64 /* AnkiMobile */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2376F34F304D123800164F64 /* Build configuration list for PBXNativeTarget "AnkiMobile" */;
@@ -99,6 +147,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					233A70B23057FB2500FA0EA2 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 2376F341304D123600164F64;
+					};
 					2376F341304D123600164F64 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -122,11 +174,19 @@
 			projectRoot = "";
 			targets = (
 				2376F341304D123600164F64 /* AnkiMobile */,
+				233A70B23057FB2500FA0EA2 /* AnkiMobileTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		233A70B13057FB2500FA0EA2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2376F340304D123600164F64 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -137,6 +197,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		233A70AF3057FB2500FA0EA2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2376F33E304D123600164F64 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -146,7 +213,55 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		233A70B83057FB2500FA0EA2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2376F341304D123600164F64 /* AnkiMobile */;
+			targetProxy = 233A70B73057FB2500FA0EA2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		233A70BA3057FB2500FA0EA2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dainguyen.AnkiMobileTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AnkiMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AnkiMobile";
+			};
+			name = Debug;
+		};
+		233A70BB3057FB2500FA0EA2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.dainguyen.AnkiMobileTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AnkiMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AnkiMobile";
+			};
+			name = Release;
+		};
 		2376F34D304D123800164F64 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -333,6 +448,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		233A70B93057FB2500FA0EA2 /* Build configuration list for PBXNativeTarget "AnkiMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				233A70BA3057FB2500FA0EA2 /* Debug */,
+				233A70BB3057FB2500FA0EA2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		2376F33D304D123600164F64 /* Build configuration list for PBXProject "AnkiMobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
