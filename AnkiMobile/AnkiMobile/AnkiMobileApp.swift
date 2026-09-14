@@ -16,7 +16,6 @@ struct AnkiMobileApp: App {
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
-        SampleData.seedIfNeeded(container.mainContext)
         SyncState.ensure(in: container.mainContext)
     }
 
