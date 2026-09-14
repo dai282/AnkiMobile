@@ -65,7 +65,6 @@ struct SyncView: View {
     // Login form
     @State private var loginUser = ""
     @State private var loginPassword = ""
-    @State private var loginHost = AuthController.defaultHost
     @State private var isLoggingIn = false
     @State private var loginError: String?
 
@@ -129,8 +128,6 @@ struct SyncView: View {
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
             field(icon: "lock", placeholder: "Password", text: $loginPassword, secure: true)
-            field(icon: "server.rack", placeholder: "Server", text: $loginHost, secure: false)
-                .textInputAutocapitalization(.never)
 
             if let loginError {
                 Text(loginError)
@@ -495,7 +492,7 @@ struct SyncView: View {
         Task {
             defer { isLoggingIn = false }
             do {
-                try await auth.logIn(username: loginUser, password: loginPassword, host: loginHost)
+                try await auth.logIn(username: loginUser, password: loginPassword, host: AuthController.defaultHost)
                 loginPassword = ""
             } catch {
                 loginError = error.localizedDescription

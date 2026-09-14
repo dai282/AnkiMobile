@@ -18,8 +18,8 @@ final class AuthController {
     private(set) var credentials: SyncCredentials?
     var isLoggedIn: Bool { credentials != nil }
 
-    /// Default endpoint for development — the local self-hosted Anki sync server.
-    static let defaultHost = "http://localhost:8080"
+    /// AnkiWeb's public sync endpoint. The app always syncs against this.
+    static let defaultHost = "https://sync.ankiweb.net"
 
     init(engine: any SyncEngine) {
         self.engine = engine
