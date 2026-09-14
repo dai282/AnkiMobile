@@ -298,8 +298,16 @@ always works offline; sync is an explicit action.
       it on the Decks tab. The current combined indicator covers the common case.
 
 ### V2.7 — Media (audio/images)
-- [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.
-- [ ] Store media in the app sandbox; play answer audio via AVAudioPlayer (wire the speaker button).
+- **V2.7a — Local media plumbing** ✅
+  - [x] Preserve `[sound:…]` references on import into `Card.audio` (filenames), while still
+        stripping them from the displayed text.
+  - [x] `MediaStore` — a flat media directory in Application Support; look up a file by name.
+  - [x] Wire the study speaker button: plays the first present media file via `AudioPlayer`
+        (AVFoundation); lights up only when the card has audio, no-ops if the file isn't
+        downloaded yet.
+- **V2.7b — Media download (`/msync/`)** ⬜ (the big part)
+  - [ ] Media sync protocol: `begin` → `mediaChanges` → `downloadFiles` (zip) → store into
+        `MediaStore`; record media usn. Then the speaker button actually plays.
 
 ### V2.8 — Hardening & tests (last)
 > Done once the feature set has stabilized.

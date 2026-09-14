@@ -94,6 +94,7 @@ struct CollectionImporter {
                 state: cardState,
                 due: dueDate(for: row, state: cardState, crt: crt)
             )
+            card.audio = audioRefs(from: note.flds)
             card.interval = max(0, row.ivl)
             card.ease = row.factor > 0 ? Double(row.factor) / 1000.0 : 2.5
             card.reps = row.reps
@@ -156,6 +157,18 @@ struct CollectionImporter {
         let front = parts.first ?? ""
         let back = parts.dropFirst().joined(separator: "\n\n")
         return (front, back)
+    }
+
+    /// Extracts media filenames from `[sound:filename]` tags across all of a note's fields,
+    /// in order. `clean()` strips these from the display text; here we keep the filenames.
+    private func audioRefs(from flds: String) -> [String] {
+        let pattern = "\\[sound:([^\\]]+)\\]"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(flds.startIndex..., in: flds)
+        return regex.matches(in: flds, range: range).compactMap { match in
+            guard let r = Range(match.range(at: 1), in: flds) else { return nil }
+            return String(flds[r])
+        }
     }
 
     private func tags(from raw: String) -> [String] {
