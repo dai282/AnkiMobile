@@ -33,7 +33,6 @@ private struct PullGuardPrompt: Identifiable {
 struct SyncView: View {
     @Environment(\.modelContext) private var modelContext
 
-    @AppStorage("fullOfflineMode") private var fullOfflineMode = true
     @AppStorage("mediaSyncing") private var mediaSyncing = true
 
     @State private var isSyncing = false
@@ -42,6 +41,10 @@ struct SyncView: View {
     @State private var pullGuard: PullGuardPrompt?
     @State private var status: SyncStatus?
     @State private var checkingStatus = false
+    @State private var dbBytes = 0
+    @State private var mediaBytes = 0
+    @State private var mediaFiles = 0
+    @State private var confirmPrune = false
     @State private var syncProgress: Double = 0
     @State private var syncStageText = ""
     @State private var lastSync = "Today at 09:37"
@@ -343,14 +346,8 @@ struct SyncView: View {
 
             VStack(spacing: 0) {
                 toggleRow(
-                    title: "Full Offline Mode",
-                    subtitle: "Keep all decks and media cached locally for zero-latency studying.",
-                    isOn: $fullOfflineMode
-                )
-                Divider().overlay(Palette.hairline)
-                toggleRow(
                     title: "Media Syncing",
-                    subtitle: "Enabled on Wi-Fi and cellular networks.",
+                    subtitle: "Download referenced audio & images when you Download Decks.",
                     isOn: $mediaSyncing
                 )
                 Divider().overlay(Palette.hairline)
@@ -358,6 +355,25 @@ struct SyncView: View {
             }
             .surfaceCard(padding: 0, cornerRadius: Metrics.radiusCard)
         }
+        .task { refreshStorage() }
+        .alert("Prune Media Cache", isPresented: $confirmPrune) {
+            Button("Delete \(mediaFiles) file\(mediaFiles == 1 ? "" : "s")", role: .destructive) {
+                MediaStore.clear(); refreshStorage()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes downloaded audio/images (\(byteText(mediaBytes))). They'll re-download on the next Download Decks. Your decks and progress are untouched.")
+        }
+    }
+
+    private func refreshStorage() {
+        dbBytes = CollectionStore.sizeBytes
+        mediaBytes = MediaStore.sizeBytes
+        mediaFiles = MediaStore.fileCount
+    }
+
+    private func byteText(_ bytes: Int) -> String {
+        String(format: "%.1f MB", Double(bytes) / 1_048_576)
     }
 
     private func toggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
@@ -374,16 +390,17 @@ struct SyncView: View {
     }
 
     private var cacheRow: some View {
-        VStack(alignment: .leading, spacing: Metrics.spaceSm) {
+        let total = max(1, dbBytes + mediaBytes)
+        return VStack(alignment: .leading, spacing: Metrics.spaceSm) {
             HStack {
-                Text("Cache Allocation").font(AppFont.bodySm).foregroundStyle(Palette.textPrimary)
+                Text("On-Device Storage").font(AppFont.bodySm).foregroundStyle(Palette.textPrimary)
                 Spacer()
-                Text("84.2 MB / 1.2 GB").font(AppFont.monoSm).foregroundStyle(Palette.primary)
+                Text(byteText(dbBytes + mediaBytes)).font(AppFont.monoSm).foregroundStyle(Palette.primary)
             }
             GeometryReader { geo in
                 HStack(spacing: 0) {
-                    Palette.primary.frame(width: geo.size.width * 0.07)
-                    Palette.success.frame(width: geo.size.width * 0.18)
+                    Palette.primary.frame(width: geo.size.width * CGFloat(dbBytes) / CGFloat(total))
+                    Palette.success.frame(width: geo.size.width * CGFloat(mediaBytes) / CGFloat(total))
                     Spacer(minLength: 0)
                 }
             }
@@ -391,12 +408,13 @@ struct SyncView: View {
             .background(Palette.surfaceElevated)
             .clipShape(Capsule())
             HStack {
-                legendDot(Palette.primary, "DB 8.2MB")
-                legendDot(Palette.success, "Media 76MB")
+                legendDot(Palette.primary, "DB \(byteText(dbBytes))")
+                legendDot(Palette.success, "Media \(byteText(mediaBytes)) · \(mediaFiles)")
                 Spacer()
-                Button("Prune Cache") {}
+                Button("Prune Media") { confirmPrune = true }
                     .font(AppFont.labelSm)
-                    .foregroundStyle(Palette.primary)
+                    .foregroundStyle(mediaFiles == 0 ? Palette.textMuted : Palette.primary)
+                    .disabled(mediaFiles == 0)
             }
         }
         .padding(Metrics.spaceMd)
@@ -597,6 +615,7 @@ struct SyncView: View {
                     at: 0
                 )
                 await refreshStatus()
+                refreshStorage()
             } catch {
                 activity.insert(
                     ActivityEntry(kind: .deck, title: "Pull failed",

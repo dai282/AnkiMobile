@@ -149,15 +149,19 @@ struct AnkiWebSyncEngine: SyncEngine {
 
         print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) new=\(summary.newCards); persisted \(CollectionStore.collectionURL.lastPathComponent); anchor usn=\(meta.usn) mod=\(meta.modified) scm=\(meta.schema)")
 
-        // Fetch referenced media (audio) so the speaker button can play it. Best-effort —
-        // never fail the pull over media. Media is the long tail, so map it to 0.5→1.0.
+        // Fetch referenced media (audio) so the speaker button can play it, unless the user
+        // turned media syncing off. Best-effort — never fail the pull over media. Media is the
+        // long tail, so map it to 0.5→1.0.
+        let mediaSyncing = UserDefaults.standard.object(forKey: "mediaSyncing") as? Bool ?? true
         onStage(SyncStage(text: "Downloading media…", progress: 0.5))
+        if mediaSyncing {
         do {
             try await downloadMedia(filenames: summary.audioFiles, host: host, hostKey: credentials.hostKey) { done, total in
                 let fraction = total > 0 ? Double(done) / Double(total) : 1
                 onStage(SyncStage(text: "Downloading media \(done)/\(total)…", progress: 0.5 + 0.5 * fraction))
             }
         } catch { print("[media] download failed: \(error.localizedDescription)") }
+        }
 
         onStage(SyncStage(text: "Done", progress: 1))
         let mb = Double(dbBytes.count) / (1024 * 1024)

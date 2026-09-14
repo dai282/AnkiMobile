@@ -318,11 +318,20 @@ always works offline; sync is an explicit action.
     future refinement.
 
 ### V2.8 — Hardening & tests (last)
-> Done once the feature set has stabilized.
-- [ ] Background/last-sync bookkeeping; retry + offline queueing of pending reviews.
-- [ ] Wire the currently-cosmetic **Offline Mode / Media Syncing / Prune Cache** controls, or
-      remove them if we decide media is out of scope.
-- [ ] Tests: scheduler round-trip, sync reconciliation, auth failure paths.
+- **V2.8a — Honest storage & controls** ✅
+  - [x] Real on-device storage: actual collection + media sizes / file count (was hardcoded).
+  - [x] **Prune Media** wired — confirms, then clears the media cache (decks/progress untouched).
+  - [x] **Media Syncing** toggle wired — gates media download during a pull.
+  - [x] Removed the non-functional **Full Offline Mode** toggle (everything is already local-first).
+  - [x] Speaker button lights up only when a referenced media file is actually present (dims after Prune).
+  - [x] Guard Deck Detail / Study against a deck deleted by a re-import (Download Decks purges +
+        re-inserts) — pop to the fresh list instead of a fatal SwiftData fault.
+- **V2.8b — Tests** ⬜ (needs a Unit Testing Bundle target added in Xcode)
+  - [ ] Scheduler round-trip (new → learning → review; lapse; graduate).
+  - [ ] `MediaZip` stored-zip extraction; `AnkiSQLite.Protobuf` read/write round-trip.
+  - [ ] `AnkiSchema` field join/split, ease↔factor, type/queue mapping; queue-count bucketing.
+- **Deferred:** background/last-sync bookkeeping; retry + offline queueing of pending reviews
+  (not needed for the current explicit-sync model).
 
 ### Deferred / stretch (not blocking V2)
 - [ ] Media hash-based dedup.

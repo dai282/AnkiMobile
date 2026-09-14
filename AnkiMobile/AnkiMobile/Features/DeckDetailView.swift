@@ -12,6 +12,7 @@ struct DeckDetailView: View {
     let deck: Deck
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     /// Observe cards so counts refresh immediately after study ratings.
     @Query private var allCards: [Card]
 
@@ -38,6 +39,17 @@ struct DeckDetailView: View {
     }
 
     var body: some View {
+        // A re-import (Download Decks) purges + re-inserts decks/cards, deleting the object this
+        // pushed view is holding. Accessing a deleted model faults fatally, so bail to the fresh
+        // (@Query-backed) deck list instead.
+        if deck.modelContext == nil {
+            Color.clear.onAppear { dismiss() }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         ScrollView {
             VStack(spacing: Metrics.spaceMd) {
                 identityBanner

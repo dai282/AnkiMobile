@@ -31,4 +31,22 @@ enum MediaStore {
         try ensureDirectory()
         try data.write(to: directory.appendingPathComponent(filename))
     }
+
+    private static var contents: [URL] {
+        (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+    }
+
+    static var fileCount: Int { contents.count }
+
+    static var sizeBytes: Int {
+        contents.reduce(0) { $0 + ((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+    }
+
+    /// Deletes all downloaded media (keeps the collection). Returns the number removed.
+    @discardableResult
+    static func clear() -> Int {
+        let files = contents
+        for url in files { try? FileManager.default.removeItem(at: url) }
+        return files.count
+    }
 }
