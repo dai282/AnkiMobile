@@ -25,4 +25,10 @@ enum MediaStore {
         let url = directory.appendingPathComponent(filename)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
+
+    /// Writes a downloaded media file into the store.
+    static func write(_ data: Data, filename: String) throws {
+        try ensureDirectory()
+        try data.write(to: directory.appendingPathComponent(filename))
+    }
 }

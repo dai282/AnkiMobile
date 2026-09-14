@@ -29,6 +29,8 @@ struct CollectionImporter {
         /// Cards present now that weren't in the previous pull (true delta, not the re-import total).
         let newCards: Int
         let topDeckName: String
+        /// All media filenames referenced by imported cards (for media download).
+        let audioFiles: [String]
     }
 
     func importAll() throws -> Summary {
@@ -82,6 +84,7 @@ struct CollectionImporter {
         // Cards.
         var imported = 0
         var importedCardIDs: Set<Int> = []
+        var audioFiles: Set<String> = []
         for row in cardRows {
             guard let note = notes[row.nid] else { continue }
             let (front, back) = frontBack(from: note.flds)
@@ -95,6 +98,7 @@ struct CollectionImporter {
                 due: dueDate(for: row, state: cardState, crt: crt)
             )
             card.audio = audioRefs(from: note.flds)
+            audioFiles.formUnion(card.audio)
             card.interval = max(0, row.ivl)
             card.ease = row.factor > 0 ? Double(row.factor) / 1000.0 : 2.5
             card.reps = row.reps
@@ -111,7 +115,8 @@ struct CollectionImporter {
 
         let newCards = importedCardIDs.subtracting(previousCardIDs).count
         let top = deckRows.first { parentName(of: $0.name) == nil }?.name ?? "Collection"
-        return Summary(decks: deckByAnkiId.count, cards: imported, newCards: newCards, topDeckName: lastComponent(top))
+        return Summary(decks: deckByAnkiId.count, cards: imported, newCards: newCards,
+                       topDeckName: lastComponent(top), audioFiles: Array(audioFiles))
     }
 
     /// The Anki ids of cards already imported from a previous pull.

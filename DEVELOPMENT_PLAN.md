@@ -305,9 +305,17 @@ always works offline; sync is an explicit action.
   - [x] Wire the study speaker button: plays the first present media file via `AudioPlayer`
         (AVFoundation); lights up only when the card has audio, no-ops if the file isn't
         downloaded yet.
-- **V2.7b — Media download (`/msync/`)** ⬜ (the big part)
-  - [ ] Media sync protocol: `begin` → `mediaChanges` → `downloadFiles` (zip) → store into
-        `MediaStore`; record media usn. Then the speaker button actually plays.
+- **V2.7b — Media download (`/msync/`)** ✅
+  - [x] Download referenced media by filename: `begin` → `downloadFiles {files:[…]}` → parse the
+        (Stored, uncompressed) zip via `MediaZip` → write into `MediaStore`. Only fetches files a
+        card references and that aren't already present; runs best-effort at the end of a Pull.
+  - [x] `send()` generalized to the `/msync/` service. Then the speaker button actually plays.
+  - [x] Staged **pull progress**: `pullDecks` now reports stages (checking → downloading collection
+        → importing → downloading media N/M → done) via an `onStage` callback, shown as a progress
+        bar on the Sync tab instead of just a spinner.
+  - Note: this fetches media *by card reference* rather than doing a full incremental media sync
+    (no `mediaChanges`/usn tracking or deletions) — sufficient for playback; full media sync is a
+    future refinement.
 
 ### V2.8 — Hardening & tests (last)
 > Done once the feature set has stabilized.
