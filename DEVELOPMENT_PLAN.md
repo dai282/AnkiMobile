@@ -298,8 +298,24 @@ always works offline; sync is an explicit action.
       it on the Decks tab. The current combined indicator covers the common case.
 
 ### V2.7 — Media (audio/images)
-- [ ] Media sync (`/msync/…`) to download referenced files; keep `[sound:…]` refs on import.
-- [ ] Store media in the app sandbox; play answer audio via AVAudioPlayer (wire the speaker button).
+- **V2.7a — Local media plumbing** ✅
+  - [x] Preserve `[sound:…]` references on import into `Card.audio` (filenames), while still
+        stripping them from the displayed text.
+  - [x] `MediaStore` — a flat media directory in Application Support; look up a file by name.
+  - [x] Wire the study speaker button: plays the first present media file via `AudioPlayer`
+        (AVFoundation); lights up only when the card has audio, no-ops if the file isn't
+        downloaded yet.
+- **V2.7b — Media download (`/msync/`)** ✅
+  - [x] Download referenced media by filename: `begin` → `downloadFiles {files:[…]}` → parse the
+        (Stored, uncompressed) zip via `MediaZip` → write into `MediaStore`. Only fetches files a
+        card references and that aren't already present; runs best-effort at the end of a Pull.
+  - [x] `send()` generalized to the `/msync/` service. Then the speaker button actually plays.
+  - [x] Staged **pull progress**: `pullDecks` now reports stages (checking → downloading collection
+        → importing → downloading media N/M → done) via an `onStage` callback, shown as a progress
+        bar on the Sync tab instead of just a spinner.
+  - Note: this fetches media *by card reference* rather than doing a full incremental media sync
+    (no `mediaChanges`/usn tracking or deletions) — sufficient for playback; full media sync is a
+    future refinement.
 
 ### V2.8 — Hardening & tests (last)
 > Done once the feature set has stabilized.

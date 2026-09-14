@@ -21,6 +21,9 @@ final class Card {
     var front: String
     var back: String
     var tags: [String]
+    /// Media filenames referenced by the note's `[sound:…]` tags, in order. Played via the
+    /// speaker button once the files are available locally (media sync is V2.7b).
+    var audio: [String] = []
 
     // MARK: Scheduling
     /// Backing storage for `state` (SwiftData persists the raw Int).

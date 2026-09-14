@@ -199,7 +199,7 @@ struct SyncView: View {
                 Spacer()
             }
 
-            if isSyncing {
+            if isSyncing || isPulling {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(syncStageText).font(AppFont.monoSm).foregroundStyle(Palette.textSecondary)
@@ -207,7 +207,7 @@ struct SyncView: View {
                         Text("\(Int(syncProgress * 100))%").font(AppFont.monoSm).foregroundStyle(Palette.textSecondary)
                     }
                     ProgressView(value: syncProgress)
-                        .tint(Palette.success)
+                        .tint(isPulling ? Palette.primary : Palette.success)
                 }
             }
         }
@@ -580,10 +580,13 @@ struct SyncView: View {
     private func performPull() {
         guard let creds = auth.credentials else { return }
         isPulling = true
+        syncProgress = 0
         Task {
             defer { isPulling = false }
             do {
-                let result = try await engine.pullDecks(into: modelContext, credentials: creds)
+                let result = try await engine.pullDecks(into: modelContext, credentials: creds) { stage in
+                    withAnimation { syncStageText = stage.text; syncProgress = stage.progress }
+                }
                 let cardsText = result.newCards == 0
                     ? "no new cards"
                     : "\(result.newCards) new card\(result.newCards == 1 ? "" : "s")"

@@ -79,8 +79,42 @@ struct AnkiWebSyncEngine: SyncEngine {
         return data
     }
 
-    func pullDecks(into context: ModelContext, credentials: SyncCredentials) async throws -> PullResult {
+    /// Downloads the given media files (by Anki filename) via `/msync/` into the MediaStore,
+    /// skipping any already present. Best-effort: returns the number newly stored. Uses the
+    /// already-resolved shard `host`. (V2.7b — media download; playback wired in V2.7a.)
+    @discardableResult
+    func downloadMedia(filenames: [String], host: String, hostKey: String,
+                       onProgress: (_ done: Int, _ total: Int) -> Void = { _, _ in }) async throws -> Int {
+        let needed = Array(Set(filenames)).filter { MediaStore.existingURL(for: $0) == nil }
+        guard !needed.isEmpty else { return 0 }
+
         let skey = sessionKey()
+        // begin — validates the media session; response is JsonResult { data:{usn,sk}, err }.
+        let beginBody = try JSONSerialization.data(withJSONObject: ["v": clientVersion])
+        let (beginData, _) = try await send(method: "begin", host: host, hostKey: hostKey, body: beginBody, sessionKey: skey, service: "msync")
+        if let err = jsonObject(beginData)["err"] as? String, !err.isEmpty {
+            throw SyncError.network(err)
+        }
+
+        var stored = 0
+        onProgress(0, needed.count)
+        for batch in needed.chunked(into: 25) {
+            let body = try JSONSerialization.data(withJSONObject: ["files": batch])
+            let (zip, _) = try await send(method: "downloadFiles", host: host, hostKey: hostKey, body: body, sessionKey: skey, service: "msync")
+            for (name, data) in MediaZip.extract(zip) {
+                try? MediaStore.write(data, filename: name)
+                stored += 1
+            }
+            onProgress(stored, needed.count)
+        }
+        print("[media] downloaded \(stored) file(s) of \(needed.count) requested")
+        return stored
+    }
+
+    func pullDecks(into context: ModelContext, credentials: SyncCredentials,
+                   onStage: @escaping (SyncStage) -> Void) async throws -> PullResult {
+        let skey = sessionKey()
+        onStage(SyncStage(text: "Checking server…", progress: 0.05))
         let (meta, host) = try await fetchMeta(credentials, sessionKey: skey)
         if !meta.shouldContinue {
             throw SyncError.network(meta.serverMessage.isEmpty ? "Server refused sync." : meta.serverMessage)
@@ -90,6 +124,7 @@ struct AnkiWebSyncEngine: SyncEngine {
         }
 
         // First sync from our (non-Anki) local store = full download. Stay on the host meta resolved to.
+        onStage(SyncStage(text: "Downloading collection…", progress: 0.15))
         let dbBytes = try await downloadCollection(host: host, hostKey: credentials.hostKey, sessionKey: skey)
 
         // Persist the collection as the sync source of truth (not a temp file).
@@ -98,6 +133,7 @@ struct AnkiWebSyncEngine: SyncEngine {
         try dbBytes.write(to: CollectionStore.collectionURL)
 
         // Materialize into our SwiftData store for the UI.
+        onStage(SyncStage(text: "Importing cards…", progress: 0.4))
         let reader = try AnkiCollectionReader(path: CollectionStore.collectionURL.path)
         let crt = (try? reader.creationEpoch()) ?? 0
         let summary = try CollectionImporter(reader: reader, context: context).importAll()
@@ -113,6 +149,17 @@ struct AnkiWebSyncEngine: SyncEngine {
 
         print("[pull] imported decks=\(summary.decks) cards=\(summary.cards) new=\(summary.newCards); persisted \(CollectionStore.collectionURL.lastPathComponent); anchor usn=\(meta.usn) mod=\(meta.modified) scm=\(meta.schema)")
 
+        // Fetch referenced media (audio) so the speaker button can play it. Best-effort —
+        // never fail the pull over media. Media is the long tail, so map it to 0.5→1.0.
+        onStage(SyncStage(text: "Downloading media…", progress: 0.5))
+        do {
+            try await downloadMedia(filenames: summary.audioFiles, host: host, hostKey: credentials.hostKey) { done, total in
+                let fraction = total > 0 ? Double(done) / Double(total) : 1
+                onStage(SyncStage(text: "Downloading media \(done)/\(total)…", progress: 0.5 + 0.5 * fraction))
+            }
+        } catch { print("[media] download failed: \(error.localizedDescription)") }
+
+        onStage(SyncStage(text: "Done", progress: 1))
         let mb = Double(dbBytes.count) / (1024 * 1024)
         return PullResult(deckName: summary.topDeckName, newCards: summary.newCards, sizeMB: mb)
     }
@@ -386,14 +433,14 @@ struct AnkiWebSyncEngine: SyncEngine {
     /// A stateful normal sync must reuse ONE session key across all its requests, so the
     /// server can correlate start → chunk → finish. `sessionKey` defaults to a fresh random
     /// key, which is correct for the one-shot login/meta/download calls.
-    private func send(method: String, host: String, hostKey: String, body: Data, sessionKey: String? = nil) async throws -> (Data, String) {
+    private func send(method: String, host: String, hostKey: String, body: Data, sessionKey: String? = nil, service: String = "sync") async throws -> (Data, String) {
         var baseHost = normalizedHost(host)
         let skey = sessionKey ?? self.sessionKey()
         let compressed = try Zstd.compress(body)
 
         for _ in 0..<4 {
             guard let url = URL(string: baseHost)?
-                .appendingPathComponent("sync")
+                .appendingPathComponent(service)
                 .appendingPathComponent(method) else {
                 throw SyncError.network("Invalid server URL.")
             }

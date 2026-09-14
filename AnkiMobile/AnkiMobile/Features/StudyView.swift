@@ -48,7 +48,7 @@ struct StudyView: View {
                 topBar
                 if let card = current {
                     ScrollView {
-                        CardFace(card: card, showingAnswer: showingAnswer, onToggleStar: { toggleStar(card) }, onToggleFlag: { toggleFlag(card) })
+                        CardFace(card: card, showingAnswer: showingAnswer, onPlayAudio: { playAudio(card) }, onToggleStar: { toggleStar(card) }, onToggleFlag: { toggleFlag(card) })
                             .padding(.horizontal, Metrics.screenMargin)
                             .padding(.top, Metrics.spaceSm)
                             .id(card.id)
@@ -352,6 +352,13 @@ struct StudyView: View {
         }
     }
 
+    private func playAudio(_ card: Card) {
+        Haptics.impact(.light)
+        if !AudioPlayer.shared.play(filenames: card.audio) {
+            // No local media yet (download arrives in V2.7b) — nothing to play.
+        }
+    }
+
     private func toggleStar(_ card: Card) {
         Haptics.impact(.light)
         card.isStarred.toggle()
@@ -372,6 +379,7 @@ struct StudyView: View {
 private struct CardFace: View {
     let card: Card
     let showingAnswer: Bool
+    let onPlayAudio: () -> Void
     let onToggleStar: () -> Void
     let onToggleFlag: () -> Void
 
@@ -425,7 +433,9 @@ private struct CardFace: View {
             }
             Spacer()
             HStack(spacing: 4) {
-                iconButton("speaker.wave.2.fill", Palette.textMuted, label: "Play audio") {}
+                iconButton("speaker.wave.2.fill",
+                           card.audio.isEmpty ? Palette.textMuted.opacity(0.35) : Palette.primary,
+                           label: "Play audio", action: onPlayAudio)
                 iconButton(card.isStarred ? "star.fill" : "star",
                            card.isStarred ? Palette.warning : Palette.textMuted,
                            label: card.isStarred ? "Unstar card" : "Star card",
