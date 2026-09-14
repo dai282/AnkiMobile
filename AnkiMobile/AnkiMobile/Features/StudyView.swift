@@ -42,6 +42,16 @@ struct StudyView: View {
     }
 
     var body: some View {
+        // If the deck was deleted underneath us (e.g. a re-import while this was open), bail
+        // rather than fault on its deleted cards.
+        if deck.modelContext == nil {
+            Color.clear.onAppear { dismiss() }
+        } else {
+            session
+        }
+    }
+
+    private var session: some View {
         ZStack {
             Palette.canvas.ignoresSafeArea()
             VStack(spacing: 0) {
@@ -424,6 +434,11 @@ private struct CardFace: View {
         )
     }
 
+    /// True only when at least one referenced media file is actually present locally.
+    private var hasPlayableAudio: Bool {
+        card.audio.contains { MediaStore.existingURL(for: $0) != nil }
+    }
+
     private var toolbar: some View {
         HStack {
             HStack(spacing: 6) {
@@ -434,7 +449,7 @@ private struct CardFace: View {
             Spacer()
             HStack(spacing: 4) {
                 iconButton("speaker.wave.2.fill",
-                           card.audio.isEmpty ? Palette.textMuted.opacity(0.35) : Palette.primary,
+                           hasPlayableAudio ? Palette.primary : Palette.textMuted.opacity(0.35),
                            label: "Play audio", action: onPlayAudio)
                 iconButton(card.isStarred ? "star.fill" : "star",
                            card.isStarred ? Palette.warning : Palette.textMuted,

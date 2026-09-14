@@ -22,6 +22,14 @@ enum CollectionStore {
         FileManager.default.fileExists(atPath: collectionURL.path)
     }
 
+    /// On-disk size of the collection (including WAL/SHM sidecars), in bytes.
+    static var sizeBytes: Int {
+        let fm = FileManager.default
+        return ["", "-wal", "-shm"].reduce(0) { sum, suffix in
+            sum + ((try? fm.attributesOfItem(atPath: collectionURL.path + suffix)[.size] as? Int) ?? 0)
+        }
+    }
+
     static func ensureDirectory() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
