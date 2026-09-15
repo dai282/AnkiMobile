@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import WebKit
 
 struct StudyView: View {
     let deck: Deck
@@ -405,20 +406,14 @@ private struct CardFace: View {
                     .font(AppFont.labelSm)
                     .tracking(1)
                     .foregroundStyle(Palette.textMuted)
-                Text(card.front)
-                    .font(AppFont.headlineMd)
-                    .foregroundStyle(Palette.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                cardContent(html: card.frontHTML, plain: card.front, font: AppFont.headlineMd)
             }
             .padding(.vertical, showingAnswer ? Metrics.spaceMd : Metrics.space2xl)
 
             if showingAnswer {
                 answerDivider
                 VStack(alignment: .leading, spacing: Metrics.spaceSm) {
-                    Text(card.back)
-                        .font(AppFont.bodyMd)
-                        .foregroundStyle(Palette.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    cardContent(html: card.backHTML, plain: card.back, font: AppFont.bodyMd)
                 }
                 .padding(.top, Metrics.spaceXs)
                 .padding(.bottom, Metrics.spaceMd)
@@ -432,6 +427,21 @@ private struct CardFace: View {
             RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                 .strokeBorder(Palette.hairline, lineWidth: 1)
         )
+    }
+
+    /// Renders card content in a WebView (using the note type's real HTML/CSS/JS, like Anki)
+    /// when HTML is available, falling back to plain text for locally-seeded cards.
+    @ViewBuilder
+    private func cardContent(html: String, plain: String, font: Font) -> some View {
+        if html.isEmpty {
+            Text(plain)
+                .font(font)
+                .foregroundStyle(Palette.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            CardWebView(html: html)
+        }
     }
 
     /// True only when at least one referenced media file is actually present locally.
@@ -492,6 +502,78 @@ private struct CardFace: View {
             .padding(.vertical, 3)
             .background(Palette.surfaceElevated, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.primary.opacity(0.25), lineWidth: 1))
+        }
+    }
+}
+
+// MARK: - Card WebView
+
+/// A self-sizing WebView that renders an Anki card's HTML document (template markup + note-type
+/// CSS + any scripts), reporting its content height so it lays out naturally inside the study
+/// ScrollView. Images resolve against the local media directory.
+private struct CardWebView: View {
+    let html: String
+    @State private var height: CGFloat = 44
+
+    var body: some View {
+        WebViewRepresentable(html: html, height: $height)
+            .frame(height: height)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct WebViewRepresentable: UIViewRepresentable {
+    let html: String
+    @Binding var height: CGFloat
+
+    /// Reports the document height back to Swift whenever it changes — after the initial layout,
+    /// after RTK's JS rebuilds the DOM, and after images finish loading. Prevents truncation.
+    private static let heightScript = """
+    function __postHeight() {
+        window.webkit.messageHandlers.height.postMessage(document.documentElement.scrollHeight);
+    }
+    window.addEventListener('load', __postHeight);
+    document.addEventListener('DOMContentLoaded', __postHeight);
+    new ResizeObserver(__postHeight).observe(document.documentElement);
+    Array.from(document.images).forEach(function(img){ img.addEventListener('load', __postHeight); });
+    __postHeight();
+    """
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let controller = WKUserContentController()
+        controller.add(context.coordinator, name: "height")
+        controller.addUserScript(WKUserScript(source: Self.heightScript,
+                                              injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        config.userContentController = controller
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.scrollView.isScrollEnabled = false      // outer SwiftUI ScrollView handles scrolling
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        guard context.coordinator.loadedHTML != html else { return }
+        context.coordinator.loadedHTML = html
+        // baseURL = media directory so <img src="foo.jpg"> resolves to downloaded files.
+        webView.loadHTMLString(html, baseURL: MediaStore.directory)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        @Binding var height: CGFloat
+        var loadedHTML: String?
+
+        init(height: Binding<CGFloat>) { _height = height }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let value = (message.body as? NSNumber).map({ CGFloat($0.doubleValue) }), value > 0 else { return }
+            if abs(value - height) > 1 { height = value }
         }
     }
 }

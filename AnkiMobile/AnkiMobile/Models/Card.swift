@@ -18,8 +18,13 @@ enum CardState: Int, Codable {
 @Model
 final class Card {
     var id: UUID
+    /// Plain-text question/answer, used for list previews and as a WebView fallback.
     var front: String
     var back: String
+    /// Full HTML documents (note-type template + CSS, rendered like Anki) shown in the study
+    /// WebView. Empty for locally-seeded cards, which fall back to the plain-text `front`/`back`.
+    var frontHTML: String = ""
+    var backHTML: String = ""
     var tags: [String]
     /// Media filenames referenced by the note's `[sound:…]` tags, in order. Played via the
     /// speaker button once the files are available locally (media sync is V2.7b).

@@ -185,7 +185,11 @@ extension Deck {
             .sorted { $0.due < $1.due }
         let review = cards.filter { $0.state == .review && $0.due <= now }
             .sorted { $0.due < $1.due }
-        let new = Array(cards.filter { $0.state == .new }.prefix(newRemainingToday(newStudiedByDeck: newStudiedByDeck)))
+        // New cards are introduced in Anki's position order (preserved in `due` at import),
+        // so the queue starts with card 1, 2, 3 … exactly like desktop.
+        let new = Array(cards.filter { $0.state == .new }
+            .sorted { $0.due < $1.due }
+            .prefix(newRemainingToday(newStudiedByDeck: newStudiedByDeck)))
 
         switch mode {
         case .all: return learning + review + new

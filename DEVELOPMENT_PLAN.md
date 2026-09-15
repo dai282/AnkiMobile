@@ -335,6 +335,24 @@ always works offline; sync is an explicit action.
 - **Deferred:** background/last-sync bookkeeping; retry + offline queueing of pending reviews
   (not needed for the current explicit-sync model).
 
+### V2.9 — Post-V2 polish (device testing)
+- **Cleanup** ✅ (`fix/delete-seeds-and-localhost`)
+  - [x] Removed first-launch sample-deck seeding — the app starts empty and pulls real decks.
+  - [x] Login always targets `https://sync.ankiweb.net`; removed the dev-only Server field.
+  - [x] Added a generated app icon (white star on a blue gradient).
+- **Faithful card rendering** ✅ (`fix/card-fields-and-new-count`)
+  - [x] New cards are introduced in Anki's **position order** (`cards.due`), not DB-rowid order —
+        RTK now starts at 1, 2, 3 like desktop.
+  - [x] Cards render via the note type's real **templates** (`qfmt`/`afmt`) and **CSS**, not a naive
+        field-0-is-front guess. Reader parses `fields`, `templates.config` (q=1/a=2) and
+        `notetypes.config` (css=3).
+  - [x] Study view hosts a self-sizing **WKWebView** — runs each deck's HTML/CSS/JS (so RTK's
+        Koohii-story scripts work), resolves `<img>` against local media, and reports height via a
+        `ResizeObserver` so long answers aren't truncated.
+  - [x] `{{type:Field}}` renders an input box on the question (no answer leak) and the value on the
+        answer. Note: the typed text isn't graded yet (reveal shows the correct value).
+  - Deferred: type-answer diff grading; forcing our dark theme over deck CSS (currently deck CSS wins).
+
 ### Deferred / stretch (not blocking V2)
 - [ ] Media hash-based dedup.
 - [ ] **FSRS** scheduler option (reference `rslib/src/scheduler/fsrs`).

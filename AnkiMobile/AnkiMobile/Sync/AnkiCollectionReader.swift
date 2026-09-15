@@ -73,40 +73,84 @@ final class AnkiCollectionReader {
         return out
     }
 
-    /// Notes keyed by id → (fields joined by 0x1f, space-delimited tags).
-    func notesByID() throws -> [Int: (flds: String, tags: String)] {
-        var map: [Int: (String, String)] = [:]
-        try forEachRow("SELECT id, flds, tags FROM notes") { stmt in
+    /// Notes keyed by id → (fields joined by 0x1f, space-delimited tags, notetype id `mid`).
+    /// `mid` lets us look up the note type's field names and card templates so we render
+    /// front/back the way Anki does (rather than assuming field 0 is the question).
+    func notesByID() throws -> [Int: (flds: String, tags: String, mid: Int)] {
+        var map: [Int: (String, String, Int)] = [:]
+        try forEachRow("SELECT id, flds, tags, mid FROM notes") { stmt in
             let id = Int(sqlite3_column_int64(stmt, 0))
             let flds = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
             let tags = sqlite3_column_text(stmt, 2).map { String(cString: $0) } ?? ""
-            map[id] = (flds, tags)
+            let mid = Int(sqlite3_column_int64(stmt, 3))
+            map[id] = (flds, tags, mid)
         }
         return map
     }
 
     struct CardRow {
-        let id, nid, did, type, queue, due, ivl, factor, reps, lapses: Int
+        let id, nid, did, ord, type, queue, due, ivl, factor, reps, lapses: Int
     }
 
-    /// All cards with their scheduling columns.
+    /// All cards with their scheduling columns. `ord` selects which of the note type's card
+    /// templates this card uses; `due` (for new cards) is the new-card position/order.
     func cardRows() throws -> [CardRow] {
         var out: [CardRow] = []
-        try forEachRow("SELECT id,nid,did,type,queue,due,ivl,factor,reps,lapses FROM cards") { stmt in
+        try forEachRow("SELECT id,nid,did,ord,type,queue,due,ivl,factor,reps,lapses FROM cards") { stmt in
             out.append(CardRow(
                 id: Int(sqlite3_column_int64(stmt, 0)),
                 nid: Int(sqlite3_column_int64(stmt, 1)),
                 did: Int(sqlite3_column_int64(stmt, 2)),
-                type: Int(sqlite3_column_int64(stmt, 3)),
-                queue: Int(sqlite3_column_int64(stmt, 4)),
-                due: Int(sqlite3_column_int64(stmt, 5)),
-                ivl: Int(sqlite3_column_int64(stmt, 6)),
-                factor: Int(sqlite3_column_int64(stmt, 7)),
-                reps: Int(sqlite3_column_int64(stmt, 8)),
-                lapses: Int(sqlite3_column_int64(stmt, 9))
+                ord: Int(sqlite3_column_int64(stmt, 3)),
+                type: Int(sqlite3_column_int64(stmt, 4)),
+                queue: Int(sqlite3_column_int64(stmt, 5)),
+                due: Int(sqlite3_column_int64(stmt, 6)),
+                ivl: Int(sqlite3_column_int64(stmt, 7)),
+                factor: Int(sqlite3_column_int64(stmt, 8)),
+                reps: Int(sqlite3_column_int64(stmt, 9)),
+                lapses: Int(sqlite3_column_int64(stmt, 10))
             ))
         }
         return out
+    }
+
+    // MARK: - Note types (field names + card templates)
+
+    /// Each note type id → its field names in `ord` order (from the `fields` table).
+    func noteFieldNames() throws -> [Int: [String]] {
+        var map: [Int: [String]] = [:]
+        try forEachRow("SELECT ntid, name FROM fields ORDER BY ntid, ord") { stmt in
+            let ntid = Int(sqlite3_column_int64(stmt, 0))
+            let name = sqlite3_column_text(stmt, 1).map { String(cString: $0) } ?? ""
+            map[ntid, default: []].append(name)
+        }
+        return map
+    }
+
+    /// Each note type id → its CSS, parsed from the `notetypes.config` protobuf
+    /// (`Notetype.Config.css`, field 3). Drives faithful WebView rendering.
+    func noteTypeCSS() throws -> [Int: String] {
+        var map: [Int: String] = [:]
+        try forEachRow("SELECT id, config FROM notetypes") { stmt in
+            let id = Int(sqlite3_column_int64(stmt, 0))
+            if let bytes = blob(stmt, 1) { map[id] = Self.stringField(3, in: bytes) ?? "" }
+        }
+        return map
+    }
+
+    /// Each note type id → (template `ord` → question/answer format strings), parsed from the
+    /// `templates.config` protobuf (`CardTemplateConfig.q_format` field 1, `a_format` field 2).
+    func cardTemplates() throws -> [Int: [Int: (q: String, a: String)]] {
+        var map: [Int: [Int: (String, String)]] = [:]
+        try forEachRow("SELECT ntid, ord, config FROM templates") { stmt in
+            let ntid = Int(sqlite3_column_int64(stmt, 0))
+            let ord = Int(sqlite3_column_int64(stmt, 1))
+            let bytes = blob(stmt, 2) ?? []
+            let q = Self.stringField(1, in: bytes) ?? ""
+            let a = Self.stringField(2, in: bytes) ?? ""
+            map[ntid, default: [:]][ord] = (q, a)
+        }
+        return map
     }
 
     // MARK: - Deck config (new cards/day)
@@ -219,6 +263,23 @@ final class AnkiCollectionReader {
             let tag = readVarint(bytes, &i)
             let f = Int(tag >> 3), wire = Int(tag & 7)
             if f == field && wire == 0 { return readVarint(bytes, &i) }
+            skip(wire: wire, bytes, &i)
+        }
+        return nil
+    }
+
+    /// Returns a length-delimited (wire type 2) field decoded as a UTF-8 string, or nil.
+    private static func stringField(_ field: Int, in bytes: [UInt8]) -> String? {
+        var i = 0
+        while i < bytes.count {
+            let tag = readVarint(bytes, &i)
+            let f = Int(tag >> 3), wire = Int(tag & 7)
+            if f == field && wire == 2 {
+                let len = Int(readVarint(bytes, &i))
+                guard i + len <= bytes.count else { return nil }
+                let sub = Array(bytes[i..<i + len])
+                return String(decoding: sub, as: UTF8.self)
+            }
             skip(wire: wire, bytes, &i)
         }
         return nil

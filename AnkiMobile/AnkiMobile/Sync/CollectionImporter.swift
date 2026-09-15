@@ -45,6 +45,12 @@ struct CollectionImporter {
         let cardRows = try reader.cardRows()
         let usedDeckIDs = Set(cardRows.map(\.did))
 
+        // Note-type metadata: field names + card templates, so we render front/back the way
+        // Anki does (via the template's qfmt/afmt) instead of assuming field 0 is the question.
+        let fieldNames = (try? reader.noteFieldNames()) ?? [:]
+        let templates = (try? reader.cardTemplates()) ?? [:]
+        let noteCSS = (try? reader.noteTypeCSS()) ?? [:]
+
         // Per-deck new-cards/day limit: deck → config id → new.perDay (protobuf-parsed).
         let configByDeck = (try? reader.deckConfigIDs()) ?? [:]
         let perDayByConfig = (try? reader.deckConfigNewPerDay()) ?? [:]
@@ -87,16 +93,19 @@ struct CollectionImporter {
         var audioFiles: Set<String> = []
         for row in cardRows {
             guard let note = notes[row.nid] else { continue }
-            let (front, back) = frontBack(from: note.flds)
+            let render = rendered(note: note, ord: row.ord, fieldNames: fieldNames,
+                                  templates: templates, css: noteCSS[note.mid] ?? "")
             let cardState = state(forType: row.type)
             let card = Card(
-                front: front,
-                back: back,
+                front: render.front,
+                back: render.back,
                 tags: tags(from: note.tags),
                 deck: deckByAnkiId[row.did],
                 state: cardState,
                 due: dueDate(for: row, state: cardState, crt: crt)
             )
+            card.frontHTML = render.frontHTML
+            card.backHTML = render.backHTML
             card.audio = audioRefs(from: note.flds)
             audioFiles.formUnion(card.audio)
             card.interval = max(0, row.ivl)
@@ -157,6 +166,144 @@ struct CollectionImporter {
         components(name).joined(separator: " :: ")
     }
 
+    typealias Rendered = (front: String, back: String, frontHTML: String, backHTML: String)
+
+    /// Renders a card the way Anki does: pick the note type's template for this card's `ord`,
+    /// substitute `{{Field}}` refs, and produce both a plain-text version (for list previews /
+    /// fallback) and a full HTML document (note-type CSS + template markup + scripts) for the
+    /// study WebView. Falls back to "field 0 = front, rest = back" if metadata is unavailable.
+    private func rendered(note: (flds: String, tags: String, mid: Int), ord: Int,
+                          fieldNames: [Int: [String]],
+                          templates: [Int: [Int: (q: String, a: String)]],
+                          css: String) -> Rendered {
+        let values = note.flds.components(separatedBy: "\u{1f}")
+        // The template for this ord, or the note type's first template as a fallback.
+        let template = templates[note.mid]?[ord] ?? templates[note.mid]?.sorted { $0.key < $1.key }.first?.value
+        guard let names = fieldNames[note.mid], let template else {
+            let (f, b) = frontBack(from: note.flds)
+            return (f, b, "", "")
+        }
+
+        var fields: [String: String] = [:]
+        for (i, name) in names.enumerated() where i < values.count { fields[name] = values[i] }
+
+        // Question body (with a real input box for {{type:…}}), then the answer body with
+        // {{FrontSide}} resolved to a copy of the question that hides the type box (so the empty
+        // field doesn't reappear above the revealed answer). `[sound:…]` is stripped — the
+        // speaker button handles audio.
+        let questionBody = stripSound(renderTemplate(template.q, fields: fields, frontSide: "", typeMode: .input))
+        let questionForEmbed = stripSound(renderTemplate(template.q, fields: fields, frontSide: "", typeMode: .hidden))
+        let answerBody = stripSound(renderTemplate(template.a, fields: fields, frontSide: questionForEmbed, typeMode: .value))
+
+        let front = clean(questionBody)
+        let back = clean(answerBody)
+        if front.isEmpty && back.isEmpty {
+            let (f, b) = frontBack(from: note.flds)
+            return (f, b, "", "")
+        }
+        return (front, back,
+                htmlDocument(body: questionBody, css: css, ord: ord),
+                htmlDocument(body: answerBody, css: css, ord: ord))
+    }
+
+    /// Wraps rendered card markup in a full HTML document: the note type's CSS plus a dark
+    /// baseline our theme can fall back to, and the `card cardN` body class Anki styles against.
+    private func htmlDocument(body: String, css: String, ord: Int) -> String {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+        :root { color-scheme: dark; }
+        html { -webkit-text-size-adjust: 100%; }
+        body { margin: 0; padding: 0; background: transparent; }
+        img { max-width: 100%; height: auto; }
+        a { color: #adc6ff; }
+        .card { background: transparent; color: #e3e2e6; font-family: -apple-system, system-ui, sans-serif; font-size: 20px; }
+        \(css)
+        </style>
+        </head>
+        <body class="card card\(ord + 1)">
+        \(body)
+        </body>
+        </html>
+        """
+    }
+
+    /// The input box shown on the question side for a `{{type:Field}}` field, mirroring Anki's
+    /// type-in-the-answer prompt. We don't grade the typed text (yet); revealing the answer shows
+    /// the correct value. Kept simple and theme-neutral so deck CSS can restyle it.
+    private static let typeInputHTML = """
+    <div style="text-align:center;margin-top:16px;">\
+    <input type="text" autocapitalize="off" autocorrect="off" spellcheck="false" \
+    style="width:80%;max-width:420px;font-size:20px;padding:10px;border:1px solid #8c909e;\
+    border-radius:8px;background:#1a1b1f;color:#e3e2e6;text-align:center;" \
+    placeholder="Type the answer"></div>
+    """
+
+    /// Removes `[sound:…]` refs from HTML markup (audio is handled by the speaker button).
+    private func stripSound(_ html: String) -> String {
+        html.replacingOccurrences(of: "\\[sound:[^\\]]+\\]", with: "", options: .regularExpression)
+    }
+
+    /// How `{{type:Field}}` is rendered: an empty input box (question), nothing (when a question
+    /// is embedded into the answer via {{FrontSide}}), or the field value (the answer's own slot).
+    private enum TypeMode { case input, hidden, value }
+
+    /// Minimal Anki template renderer: handles `{{#Field}}…{{/Field}}` / `{{^Field}}…{{/Field}}`
+    /// conditionals, `{{FrontSide}}`, and `{{Field}}` refs. Filters like `{{hint:Field}}` /
+    /// `{{cloze:Field}}` resolve to the field value; `{{type:Field}}` is special-cased so the
+    /// question shows an input box rather than leaking the answer.
+    private func renderTemplate(_ template: String, fields: [String: String],
+                                frontSide: String, typeMode: TypeMode) -> String {
+        var result = template
+
+        // 1. Conditional sections. Repeat to resolve sequential and simply-nested blocks.
+        let conditional = "\\{\\{([#^])([^}]+)\\}\\}(.*?)\\{\\{/\\2\\}\\}"
+        if let regex = try? NSRegularExpression(pattern: conditional, options: [.dotMatchesLineSeparators]) {
+            while let m = regex.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
+                  let full = Range(m.range, in: result),
+                  let typeR = Range(m.range(at: 1), in: result),
+                  let nameR = Range(m.range(at: 2), in: result),
+                  let bodyR = Range(m.range(at: 3), in: result) {
+                let negate = result[typeR] == "^"
+                let name = String(result[nameR]).trimmingCharacters(in: .whitespaces)
+                let hasValue = !(fields[name] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let include = negate ? !hasValue : hasValue
+                result.replaceSubrange(full, with: include ? String(result[bodyR]) : "")
+            }
+        }
+
+        // 2. FrontSide.
+        result = result.replacingOccurrences(of: "{{FrontSide}}", with: frontSide)
+
+        // 3. Field replacements (last match first, so ranges stay valid as we mutate).
+        if let regex = try? NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}") {
+            let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+            for m in matches.reversed() {
+                guard let full = Range(m.range, in: result), let tokR = Range(m.range(at: 1), in: result) else { continue }
+                let raw = String(result[tokR]).trimmingCharacters(in: .whitespaces)
+                var token = raw
+                if let colon = token.lastIndex(of: ":") { token = String(token[token.index(after: colon)...]) }  // strip filter prefix
+                let value = fields[token] ?? ""
+                let replacement: String
+                if raw.hasPrefix("type:") {
+                    switch typeMode {
+                    case .input:  replacement = Self.typeInputHTML
+                    case .hidden: replacement = ""
+                    case .value:  replacement = value
+                    }
+                } else {
+                    replacement = value
+                }
+                result.replaceSubrange(full, with: replacement)
+            }
+        }
+        return result
+    }
+
     private func frontBack(from flds: String) -> (String, String) {
         let parts = flds.components(separatedBy: "\u{1f}").map(clean)
         let front = parts.first ?? ""
@@ -180,12 +327,18 @@ struct CollectionImporter {
         raw.split(whereSeparator: { $0 == " " || $0 == "\u{1f}" }).map(String.init)
     }
 
-    /// Strips HTML tags, `[sound:…]` refs, and decodes a few common entities.
+    /// Strips HTML tags, `[sound:…]` refs, and decodes a few common entities. Line-breaking
+    /// tags (`<br>`, `</div>`, `</p>`, `<hr>`) become newlines first so multi-field answers
+    /// (e.g. RTK's kanji + story) don't run together.
     private func clean(_ field: String) -> String {
         var text = field.replacingOccurrences(of: "\\[sound:[^\\]]+\\]", with: "", options: .regularExpression)
+        // Drop <script>/<style> blocks (content and all) before stripping remaining tags.
+        text = text.replacingOccurrences(of: "(?is)<(script|style)[^>]*>.*?</\\1>", with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: "(?i)<br\\s*/?>|</div>|</p>|<hr[^>]*>", with: "\n", options: .regularExpression)
         text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         let entities = ["&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'"]
         for (entity, value) in entities { text = text.replacingOccurrences(of: entity, with: value) }
+        text = text.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -199,7 +352,12 @@ struct CollectionImporter {
 
     private func dueDate(for row: AnkiCollectionReader.CardRow, state: CardState, crt: Int) -> Date {
         switch state {
-        case .new, .learning:
+        case .new:
+            // For new cards Anki stores the introduction *position* in `due` (1, 2, 3 …), not a
+            // date. Encode it as a tiny epoch so the card is available now yet the study queue can
+            // sort by it and introduce cards in the same order as desktop.
+            return Date(timeIntervalSince1970: TimeInterval(max(0, row.due)))
+        case .learning:
             return .now  // make available immediately; precise learning-step timing is future work
         case .review:
             return Date(timeIntervalSince1970: TimeInterval(crt + row.due * 86_400))
