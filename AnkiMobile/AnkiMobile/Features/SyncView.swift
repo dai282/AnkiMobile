@@ -256,6 +256,7 @@ struct SyncView: View {
     private var statusColor: Color {
         guard let status else { return Palette.textMuted }
         if !status.reachable { return Palette.textMuted }
+        if !status.hasCollection { return Palette.primary }
         if status.localPending > 0 { return Palette.primary }
         if status.serverAhead { return Palette.warning }
         return Palette.success
@@ -263,6 +264,7 @@ struct SyncView: View {
 
     private var statusIcon: String {
         guard let status, status.reachable else { return "icloud.slash" }
+        if !status.hasCollection { return "icloud.and.arrow.down" }
         if status.localPending > 0 { return "arrow.up.circle.fill" }
         if status.serverAhead { return "arrow.down.circle.fill" }
         return "checkmark.icloud.fill"
@@ -271,6 +273,7 @@ struct SyncView: View {
     private var statusTitle: String {
         guard let status else { return checkingStatus ? "Checking…" : "Sync status" }
         if !status.reachable { return "Can't reach the server" }
+        if !status.hasCollection { return "Ready to download" }
         if status.localPending > 0 { return "\(status.localPending) review\(status.localPending == 1 ? "" : "s") to push" }
         if status.serverAhead { return "Cloud has new changes" }
         return "Up to date"
@@ -279,6 +282,7 @@ struct SyncView: View {
     private var statusDetail: String {
         guard let status else { return "" }
         if !status.reachable { return "Showing local state only." }
+        if !status.hasCollection { return "Tap Pull Decks to download your collection." }
         if status.localPending > 0 { return "Tap Sync Progress to push your reviews." }
         if status.serverAhead { return "Tap Sync Progress to pull the latest." }
         return "Local and cloud are in sync."

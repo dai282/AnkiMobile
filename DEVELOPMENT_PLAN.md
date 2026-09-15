@@ -352,6 +352,12 @@ always works offline; sync is an explicit action.
   - [x] `{{type:Field}}` renders an input box on the question (no answer leak) and the value on the
         answer. Note: the typed text isn't graded yet (reveal shows the correct value).
   - Deferred: type-answer diff grading; forcing our dark theme over deck CSS (currently deck CSS wins).
+- **Simplify deck detail + sync status** ✅ (`fix/remove-deck-detail-sync`)
+  - [x] Removed the mock "AnkiWeb Sync & Storage" card from Deck Detail (hardcoded "+8 cards").
+        Deck pulling now lives only on the Sync tab.
+  - [x] `checkStatus` probes the server even with no local collection, so a fresh install shows the
+        true online status (was stuck on "Can't reach the server" until the first download).
+  - [x] Added a "Ready to download" status state prompting **Pull Decks** when reachable but empty.
 
 ### Deferred / stretch (not blocking V2)
 - [ ] Media hash-based dedup.

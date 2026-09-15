@@ -17,8 +17,6 @@ struct DeckDetailView: View {
     @Query private var allCards: [Card]
 
     @State private var studyMode: StudyMode?
-    @State private var isPulling = false
-    @State private var pulled = false
     @State private var isDownloading = false
 
     private var counts: QueueCounts {
@@ -58,10 +56,6 @@ struct DeckDetailView: View {
                 } else {
                     queueBreakdown
                     studySection
-                }
-                // Download & pull live only on a downloaded top-level deck.
-                if deck.isTopLevel && deck.isDownloaded {
-                    syncCard
                 }
             }
             .padding(.horizontal, Metrics.screenMargin)
@@ -299,94 +293,6 @@ struct DeckDetailView: View {
         .opacity(enabled ? 1 : 0.5)
     }
 
-    // MARK: Mock sync card
-
-    private var syncCard: some View {
-        VStack(alignment: .leading, spacing: Metrics.spaceMd) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.2.circlepath.icloud")
-                        .foregroundStyle(Palette.primary)
-                    Text("AnkiWeb Sync & Storage")
-                        .font(AppFont.headlineSm)
-                        .foregroundStyle(Palette.textPrimary)
-                }
-                Spacer()
-                Text("Cached")
-                    .font(AppFont.labelSm)
-                    .foregroundStyle(Palette.success)
-                    .padding(.horizontal, Metrics.spaceXs)
-                    .padding(.vertical, 3)
-                    .background(Palette.success.opacity(0.15), in: Capsule())
-            }
-
-            VStack(alignment: .leading, spacing: Metrics.spaceSm) {
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "icloud.and.arrow.down")
-                            .foregroundStyle(Palette.warning)
-                        Text("Remote Changes Detected")
-                            .font(AppFont.labelMd)
-                            .foregroundStyle(Palette.textPrimary)
-                    }
-                    Spacer()
-                    Text("+8 Cards")
-                        .font(AppFont.monoSm)
-                        .foregroundStyle(Palette.warning)
-                        .padding(.horizontal, Metrics.spaceXs)
-                        .padding(.vertical, 3)
-                        .background(Palette.warning.opacity(0.15), in: Capsule())
-                }
-                Text("8 cards and note tags were edited via the desktop web client since your last sync.")
-                    .font(AppFont.bodySm)
-                    .foregroundStyle(Palette.textSecondary)
-
-                Button(action: pull) {
-                    HStack(spacing: 6) {
-                        Image(systemName: pulled ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
-                            .rotationEffect(.degrees(isPulling ? 360 : 0))
-                            .animation(isPulling ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isPulling)
-                        Text(pullLabel)
-                    }
-                    .font(AppFont.labelMd)
-                    .foregroundStyle(pulled ? Palette.success : Palette.canvas)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(
-                        (pulled ? Palette.success.opacity(0.2) : Palette.warning),
-                        in: RoundedRectangle(cornerRadius: Metrics.radiusSmall, style: .continuous)
-                    )
-                }
-                .disabled(isPulling || pulled)
-            }
-            .padding(Metrics.spaceSm)
-            .background(Palette.surfaceElevated, in: RoundedRectangle(cornerRadius: Metrics.radiusSmall, style: .continuous))
-
-            HStack {
-                Image(systemName: "internaldrive")
-                    .font(.system(size: 13))
-                Text(String(format: "%.1f MB on device", deck.sizeMB))
-                    .font(AppFont.monoSm)
-            }
-            .foregroundStyle(Palette.textMuted)
-        }
-        .surfaceCard(cornerRadius: Metrics.radiusCard)
-    }
-
-    private var pullLabel: String {
-        if pulled { return "Updated to latest version" }
-        if isPulling { return "Pulling 8 cards…" }
-        return "Pull 8 Cards & Updates · 1.4 MB"
-    }
-
-    private func pull() {
-        isPulling = true
-        Task {
-            try? await Task.sleep(for: .milliseconds(1200))
-            isPulling = false
-            withAnimation { pulled = true }
-        }
-    }
 }
 
 // StudyMode drives .fullScreenCover(item:) so it must be Identifiable.
