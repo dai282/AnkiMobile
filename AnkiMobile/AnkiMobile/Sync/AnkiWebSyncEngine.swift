@@ -339,18 +339,24 @@ struct AnkiWebSyncEngine: SyncEngine {
         var status = SyncStatus()
         status.hasCollection = CollectionStore.exists
         status.localPending = CollectionStore.pendingReviewCount()
-        guard status.hasCollection, let store = try? AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path) else {
-            return status
+
+        // Read the persisted collection's mod (0 if nothing pulled yet). We still probe the
+        // server below either way, so a fresh install reports the true online status instead of
+        // defaulting to "can't reach the server".
+        let localMod: Int
+        if status.hasCollection, let store = try? AnkiCollectionSyncStore(path: CollectionStore.collectionURL.path) {
+            localMod = (try? store.collectionMeta().mod) ?? 0
+        } else {
+            localMod = 0
         }
-        let localMod = (try? store.collectionMeta().mod) ?? 0
 
         do {
             let (meta, _) = try await fetchMeta(credentials, sessionKey: sessionKey())
             status.reachable = true
-            // Use the SAME signal syncProgress gates on (meta.mod vs the persisted col.mod), so
-            // "behind" always corresponds to a sync that will actually run and then clear it.
-            // With nothing pending locally, a differing server mod means the cloud is ahead.
-            status.serverAhead = status.localPending == 0 && meta.modified != localMod
+            // Nothing downloaded yet → the cloud has decks to pull. Otherwise use the SAME signal
+            // syncProgress gates on (meta.mod vs the persisted col.mod), so "behind" always
+            // corresponds to a sync that will actually run and then clear it.
+            status.serverAhead = !status.hasCollection || (status.localPending == 0 && meta.modified != localMod)
         } catch {
             status.reachable = false
         }
