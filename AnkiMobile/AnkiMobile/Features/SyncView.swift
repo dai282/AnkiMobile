@@ -48,14 +48,7 @@ struct SyncView: View {
     @State private var syncProgress: Double = 0
     @State private var syncStageText = ""
     @State private var lastSync = "Today at 09:37"
-    @State private var activity: [ActivityEntry] = [
-        ActivityEntry(kind: .progress, title: "Progress Synced",
-                      detail: "42 reviews synced, scheduling intervals updated across 3 decks · 0.8s",
-                      time: "09:37:12"),
-        ActivityEntry(kind: .deck, title: "Deck Updated",
-                      detail: "Medical :: Pharmacology · 8 new cards pulled from AnkiWeb · 1.4 MB",
-                      time: "08:15:04"),
-    ]
+    @State private var activity: [ActivityEntry] = []
 
     /// Both cloud actions now run against the real AnkiWeb engine (V2.3): pull downloads
     /// the collection, sync pushes local review progress.
@@ -436,10 +429,20 @@ struct SyncView: View {
         VStack(spacing: 0) {
             SectionHeader(title: "Recent Activity")
                 .padding(.bottom, Metrics.spaceXs)
-            VStack(spacing: 0) {
-                ForEach(Array(activity.enumerated()), id: \.element.id) { pair in
-                    if pair.offset > 0 { Divider().overlay(Palette.hairline) }
-                    activityRow(pair.element)
+            Group {
+                if activity.isEmpty {
+                    Text("No recent activity yet")
+                        .font(AppFont.bodySm)
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Metrics.spaceMd)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(activity.enumerated()), id: \.element.id) { pair in
+                            if pair.offset > 0 { Divider().overlay(Palette.hairline) }
+                            activityRow(pair.element)
+                        }
+                    }
                 }
             }
             .surfaceCard(padding: 0, cornerRadius: Metrics.radiusCard)

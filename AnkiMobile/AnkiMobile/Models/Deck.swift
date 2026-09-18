@@ -126,6 +126,13 @@ extension Deck {
         cards + subdecks.flatMap { $0.allCards }
     }
 
+    /// On-disk size of this deck and, recursively, its subdecks, in MB. A parent deck holds
+    /// no cards of its own (Anki cards live on leaf decks), so its own `sizeMB` is 0 — this
+    /// is what the storage pill should show instead.
+    var totalSizeMB: Double {
+        sizeMB + subdecks.reduce(0) { $0 + $1.totalSizeMB }
+    }
+
     /// The top-level ancestor. Download state is decided here — a subdeck cannot be
     /// downloaded independently of its parent.
     var rootDeck: Deck {

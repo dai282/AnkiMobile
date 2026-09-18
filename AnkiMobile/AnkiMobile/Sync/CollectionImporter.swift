@@ -33,7 +33,12 @@ struct CollectionImporter {
         let audioFiles: [String]
     }
 
-    func importAll() throws -> Summary {
+    /// - Parameter totalBytes: the collection size to divide across decks for `sizeMB`
+    ///   (see below). Pass the exact just-downloaded byte count when known, so the sum of
+    ///   per-deck sizes matches what the caller reports as the pull's total size; falls back
+    ///   to the on-disk file size, which can run slightly higher due to SQLite WAL/SHM
+    ///   journal sidecars picked up while reading.
+    func importAll(totalBytes: Int? = nil) throws -> Summary {
         let crt = (try? reader.creationEpoch()) ?? 0
         // Snapshot which Anki cards we already had before we purge + re-import, so we can
         // report how many are genuinely new rather than the full re-imported count.
@@ -91,6 +96,7 @@ struct CollectionImporter {
         var imported = 0
         var importedCardIDs: Set<Int> = []
         var audioFiles: Set<String> = []
+        var cardCountByDeck: [Int: Int] = [:]
         for row in cardRows {
             guard let note = notes[row.nid] else { continue }
             let render = rendered(note: note, ord: row.ord, fieldNames: fieldNames,
@@ -118,14 +124,35 @@ struct CollectionImporter {
             context.insert(card)
             imported += 1
             importedCardIDs.insert(row.id)
+            cardCountByDeck[row.did, default: 0] += 1
+        }
+
+        // The downloaded collection is a single shared database file, so there's no exact
+        // per-deck byte size — approximate each deck's share by its portion of the imported
+        // cards, applied to the collection's real size (rather than leaving it at 0).
+        let bytes = Double(totalBytes ?? CollectionStore.sizeBytes)
+        if imported > 0 {
+            for (ankiId, deck) in deckByAnkiId {
+                let share = Double(cardCountByDeck[ankiId] ?? 0) / Double(imported)
+                deck.sizeMB = share * bytes / (1024 * 1024)
+            }
         }
 
         try context.save()
 
         let newCards = importedCardIDs.subtracting(previousCardIDs).count
-        let top = deckRows.first { parentName(of: $0.name) == nil }?.name ?? "Collection"
+        // A pull can bring down several unrelated top-level decks at once — name the summary
+        // after the one deck when there's only one, otherwise say how many rather than
+        // arbitrarily picking the first and implying that was the whole pull.
+        let topLevelDecks = deckRows.filter { parentName(of: $0.name) == nil }
+        let topDeckName: String
+        switch topLevelDecks.count {
+        case 0: topDeckName = "Collection"
+        case 1: topDeckName = lastComponent(topLevelDecks[0].name)
+        default: topDeckName = "\(topLevelDecks.count) decks"
+        }
         return Summary(decks: deckByAnkiId.count, cards: imported, newCards: newCards,
-                       topDeckName: lastComponent(top), audioFiles: Array(audioFiles))
+                       topDeckName: topDeckName, audioFiles: Array(audioFiles))
     }
 
     /// The Anki ids of cards already imported from a previous pull.

@@ -136,7 +136,7 @@ struct AnkiWebSyncEngine: SyncEngine {
         onStage(SyncStage(text: "Importing cards…", progress: 0.4))
         let reader = try AnkiCollectionReader(path: CollectionStore.collectionURL.path)
         let crt = (try? reader.creationEpoch()) ?? 0
-        let summary = try CollectionImporter(reader: reader, context: context).importAll()
+        let summary = try CollectionImporter(reader: reader, context: context).importAll(totalBytes: dbBytes.count)
 
         // Record the sync anchor (server state we're now at) for future incremental push.
         let sync = SyncState.ensure(in: context)
