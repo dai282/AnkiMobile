@@ -110,7 +110,12 @@ struct StoragePill: View {
     }
 
     private var label: String {
-        let size = String(format: "%.0f MB", deck.sizeMB)
+        // Parent decks hold no cards directly, so roll up subdeck sizes too. Sub-1MB decks
+        // would otherwise all round down to a misleading "0 MB".
+        let mb = deck.totalSizeMB
+        let size = mb < 1 && mb > 0
+            ? String(format: "%.1f MB", mb)
+            : String(format: "%.0f MB", mb)
         return downloaded ? "Downloaded (\(size))" : "Cloud Only (\(size))"
     }
 }
